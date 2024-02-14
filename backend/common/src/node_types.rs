@@ -214,6 +214,7 @@ pub struct BlockDetails {
     pub block_time: u64,
     pub block_timestamp: u64,
     pub propagation_time: Option<u64>,
+    pub block_proposal_time: Option<u64>,
 }
 
 impl Default for BlockDetails {
@@ -223,6 +224,7 @@ impl Default for BlockDetails {
             block_timestamp: time::now(),
             block_time: 0,
             propagation_time: None,
+            block_proposal_time: None,
         }
     }
 }
@@ -247,7 +249,8 @@ impl<'de> Deserialize<'de> for BlockDetails {
     where
         D: serde::Deserializer<'de>,
     {
-        let tup = <(u64, BlockHash, u64, u64, Option<u64>)>::deserialize(deserializer)?;
+        let tup =
+            <(u64, BlockHash, u64, u64, Option<u64>, Option<u64>)>::deserialize(deserializer)?;
         Ok(BlockDetails {
             block: Block {
                 height: tup.0,
@@ -256,6 +259,7 @@ impl<'de> Deserialize<'de> for BlockDetails {
             block_time: tup.2,
             block_timestamp: tup.3,
             propagation_time: tup.4,
+            block_proposal_time: tup.5,
         })
     }
 }

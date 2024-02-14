@@ -78,6 +78,8 @@ pub enum Payload {
     AfgAuthoritySet(AfgAuthoritySet),
     #[serde(rename = "sysinfo.hwbench")]
     HwBench(NodeHwBench),
+    #[serde(rename = "block.proposal")]
+    BlockProposal(BlockProposal),
 }
 
 impl From<Payload> for internal::Payload {
@@ -89,6 +91,24 @@ impl From<Payload> for internal::Payload {
             Payload::NotifyFinalized(m) => internal::Payload::NotifyFinalized(m.into()),
             Payload::AfgAuthoritySet(m) => internal::Payload::AfgAuthoritySet(m.into()),
             Payload::HwBench(m) => internal::Payload::HwBench(m.into()),
+            Payload::BlockProposal(m) => internal::Payload::BlockProposal(m.into()),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BlockProposal {
+    pub number: u64,
+    pub hash: Hash,
+    pub block_proposal_time: u64,
+}
+
+impl From<BlockProposal> for internal::BlockProposal {
+    fn from(msg: BlockProposal) -> Self {
+        internal::BlockProposal {
+            number: msg.number,
+            hash: msg.hash.into(),
+            block_proposal_time: msg.block_proposal_time,
         }
     }
 }

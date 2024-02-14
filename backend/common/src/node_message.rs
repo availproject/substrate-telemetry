@@ -61,6 +61,7 @@ pub enum Payload {
     NotifyFinalized(Finalized),
     AfgAuthoritySet(AfgAuthoritySet),
     HwBench(NodeHwBench),
+    BlockProposal(BlockProposal),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -98,6 +99,13 @@ pub struct NodeHwBench {
     pub memory_memcpy_score: u64,
     pub disk_sequential_write_score: Option<u64>,
     pub disk_random_write_score: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlockProposal {
+    pub number: u64,
+    pub hash: BlockHash,
+    pub block_proposal_time: u64,
 }
 
 impl Payload {
