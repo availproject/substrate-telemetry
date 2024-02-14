@@ -34,3 +34,5 @@ export * from './BlockPropagationColumn';
 export * from './LastBlockColumn';
 export * from './UptimeColumn';
 export * from './BlockProposalColumn';
+export * from './BlockImportAndVerificationColumn';
+export * from './BlockImportDataRootAndExtensionColumn';

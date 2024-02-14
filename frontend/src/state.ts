@@ -81,6 +81,8 @@ export class Node {
   public blockTimestamp: Types.Timestamp;
   public propagationTime: Maybe<Types.PropagationTime>;
   public blockProposalTime: Maybe<Types.Milliseconds>;
+  public blockImportAndVerificationTime: Maybe<Types.Milliseconds>;
+  public blockImportDataRootAndExtensionTime: Maybe<Types.Milliseconds>;
 
   public finalized = 0 as Types.BlockNumber;
   public finalizedHash = '' as Types.BlockHash;
@@ -258,6 +260,8 @@ export interface StateSettings {
   blocklasttime: boolean;
   uptime: boolean;
   blockproposal: boolean;
+  blockimportandverification: boolean;
+  blockimportdataroot: boolean;
 }
 
 export interface State {

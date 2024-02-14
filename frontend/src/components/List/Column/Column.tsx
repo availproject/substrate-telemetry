@@ -39,6 +39,8 @@ import {
   LastBlockColumn,
   UptimeColumn,
   BlockProposalColumn,
+  BlockImportAndVerificationColumn,
+  BlockImportDataRootAndExtensionColumn,
 } from './';
 
 export type Column =
@@ -60,7 +62,9 @@ export type Column =
   | typeof BlockPropagationColumn
   | typeof LastBlockColumn
   | typeof UptimeColumn
-  | typeof BlockProposalColumn;
+  | typeof BlockProposalColumn
+  | typeof BlockImportAndVerificationColumn
+  | typeof BlockImportDataRootAndExtensionColumn;
 
 export interface ColumnProps {
   node: Node;
