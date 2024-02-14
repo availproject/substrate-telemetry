@@ -80,6 +80,7 @@ export class Node {
   public blockTime: Types.Milliseconds;
   public blockTimestamp: Types.Timestamp;
   public propagationTime: Maybe<Types.PropagationTime>;
+  public blockProposalTime: Maybe<Types.Milliseconds>;
 
   public finalized = 0 as Types.BlockNumber;
   public finalizedHash = '' as Types.BlockHash;
@@ -166,6 +167,7 @@ export class Node {
     this.blockTime = blockTime;
     this.blockTimestamp = blockTimestamp;
     this.propagationTime = propagationTime;
+    // todo this.proposalTime = proposalTime;
     this.stale = false;
 
     this.trigger();
@@ -255,6 +257,7 @@ export interface StateSettings {
   blockpropagation: boolean;
   blocklasttime: boolean;
   uptime: boolean;
+  blockproposal: boolean;
 }
 
 export interface State {

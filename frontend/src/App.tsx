@@ -71,6 +71,7 @@ export default class App extends React.Component {
         blockpropagation: true,
         blocklasttime: false,
         uptime: false,
+        blockproposal: true,
       },
       (settings) => {
         const selectedColumns = this.selectedColumns(settings);
