@@ -21,7 +21,8 @@ use serde::Serialize;
 
 use crate::state::Node;
 use common::node_types::{
-    BlockDetails, BlockHash, BlockNumber, NodeHardware, NodeIO, NodeStats, Timestamp,
+    BlockDetails, BlockHash, BlockMetricsDetails, BlockNumber, NodeHardware, NodeIO, NodeStats,
+    Timestamp,
 };
 use serde_json::to_writer;
 
@@ -123,6 +124,7 @@ actions! {
     20: StaleNode,
     21: NodeIOUpdate<'_>,
     22: ChainStatsUpdate<'_>,
+    23: ImportedBlockMetrics,
 }
 
 #[derive(Serialize)]
@@ -144,6 +146,9 @@ pub struct LocatedNode<'a>(pub FeedNodeId, pub f32, pub f32, pub &'a str);
 
 #[derive(Serialize)]
 pub struct ImportedBlock<'a>(pub FeedNodeId, pub &'a BlockDetails);
+
+#[derive(Serialize)]
+pub struct ImportedBlockMetrics(pub FeedNodeId, pub BlockMetricsDetails);
 
 #[derive(Serialize)]
 pub struct FinalizedBlock(pub FeedNodeId, pub BlockNumber, pub BlockHash);

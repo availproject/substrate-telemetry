@@ -78,8 +78,8 @@ pub enum Payload {
     AfgAuthoritySet(AfgAuthoritySet),
     #[serde(rename = "sysinfo.hwbench")]
     HwBench(NodeHwBench),
-    #[serde(rename = "block.proposal")]
-    BlockProposal(BlockProposal),
+    #[serde(rename = "block.metrics")]
+    BlockMetrics(BlockMetrics),
 }
 
 impl From<Payload> for internal::Payload {
@@ -91,24 +91,24 @@ impl From<Payload> for internal::Payload {
             Payload::NotifyFinalized(m) => internal::Payload::NotifyFinalized(m.into()),
             Payload::AfgAuthoritySet(m) => internal::Payload::AfgAuthoritySet(m.into()),
             Payload::HwBench(m) => internal::Payload::HwBench(m.into()),
-            Payload::BlockProposal(m) => internal::Payload::BlockProposal(m.into()),
+            Payload::BlockMetrics(m) => internal::Payload::BlockMetrics(m.into()),
         }
     }
 }
 
 #[derive(Deserialize, Debug)]
-pub struct BlockProposal {
-    pub number: u64,
-    pub hash: Hash,
-    pub block_proposal_time: u64,
+pub struct BlockMetrics {
+    pub proposal_timestamps: Option<(u128, u128, u64)>, // (timestamp in ms (start, end, block_number))
+    pub sync_block_start_timestamps: Option<(u128, u128, u64)>, // (timestamp in ms (start, end, block_number))
+    pub import_block_timestamps: Option<(u128, u128, u64)>, // (timestamp in ms (start, end, block_number))
 }
 
-impl From<BlockProposal> for internal::BlockProposal {
-    fn from(msg: BlockProposal) -> Self {
-        internal::BlockProposal {
-            number: msg.number,
-            hash: msg.hash.into(),
-            block_proposal_time: msg.block_proposal_time,
+impl From<BlockMetrics> for internal::BlockMetrics {
+    fn from(msg: BlockMetrics) -> Self {
+        internal::BlockMetrics {
+            proposal_timestamps: msg.proposal_timestamps,
+            sync_block_start_timestamps: msg.sync_block_start_timestamps,
+            import_block_timestamps: msg.import_block_timestamps,
         }
     }
 }

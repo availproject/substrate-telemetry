@@ -137,12 +137,10 @@ impl Node {
         &mut self,
         timestamp: u64,
         propagation_time: Option<u64>,
-        block_proposal_time: Option<u64>,
     ) -> Option<&BlockDetails> {
         self.best.block_time = timestamp - self.best.block_timestamp;
         self.best.block_timestamp = timestamp;
         self.best.propagation_time = propagation_time;
-        self.best.block_proposal_time = block_proposal_time;
 
         if self.throttle < timestamp {
             if self.best.block_time <= THROTTLE_THRESHOLD {

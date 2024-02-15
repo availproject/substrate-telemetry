@@ -21,6 +21,7 @@ use arrayvec::ArrayString;
 use serde::ser::{SerializeTuple, Serializer};
 use serde::{Deserialize, Serialize};
 
+use crate::node_message::BlockMetrics;
 use crate::{time, MeanList};
 
 pub type BlockNumber = u64;
@@ -214,7 +215,6 @@ pub struct BlockDetails {
     pub block_time: u64,
     pub block_timestamp: u64,
     pub propagation_time: Option<u64>,
-    pub block_proposal_time: Option<u64>,
 }
 
 impl Default for BlockDetails {
@@ -224,7 +224,6 @@ impl Default for BlockDetails {
             block_timestamp: time::now(),
             block_time: 0,
             propagation_time: None,
-            block_proposal_time: None,
         }
     }
 }
@@ -234,7 +233,7 @@ impl Serialize for BlockDetails {
     where
         S: Serializer,
     {
-        let mut tup = serializer.serialize_tuple(5)?;
+        let mut tup: <S as Serializer>::SerializeTuple = serializer.serialize_tuple(5)?;
         tup.serialize_element(&self.block.height)?;
         tup.serialize_element(&self.block.hash)?;
         tup.serialize_element(&self.block_time)?;
@@ -259,7 +258,51 @@ impl<'de> Deserialize<'de> for BlockDetails {
             block_time: tup.2,
             block_timestamp: tup.3,
             propagation_time: tup.4,
-            block_proposal_time: tup.5,
         })
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BlockMetricsDetail {
+    pub start: u128,
+    pub end: u128,
+    pub block: u64,
+    pub duration: u128,
+}
+impl From<(u128, u128, u64)> for BlockMetricsDetail {
+    fn from(value: (u128, u128, u64)) -> Self {
+        Self {
+            start: value.0,
+            end: value.1,
+            block: value.2,
+            duration: value.1 - value.0,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BlockMetricsDetails {
+    pub proposal: Option<BlockMetricsDetail>, // (timestamp in ms (start, end, block_number, duration))
+    pub sync_block_start: Option<BlockMetricsDetail>, // (timestamp in ms (start, end, block_number, duration))
+    pub import_block: Option<BlockMetricsDetail>, // (timestamp in ms (start, end, block_number, duration))
+}
+
+impl From<BlockMetrics> for BlockMetricsDetails {
+    fn from(value: BlockMetrics) -> Self {
+        let proposal = value
+            .proposal_timestamps
+            .map(|v| BlockMetricsDetail::from(v));
+        let sync_block_start = value
+            .sync_block_start_timestamps
+            .map(|v| BlockMetricsDetail::from(v));
+        let import_block = value
+            .import_block_timestamps
+            .map(|v| BlockMetricsDetail::from(v));
+
+        Self {
+            proposal,
+            sync_block_start,
+            import_block,
+        }
     }
 }

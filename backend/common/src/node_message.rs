@@ -61,7 +61,7 @@ pub enum Payload {
     NotifyFinalized(Finalized),
     AfgAuthoritySet(AfgAuthoritySet),
     HwBench(NodeHwBench),
-    BlockProposal(BlockProposal),
+    BlockMetrics(BlockMetrics),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -102,10 +102,10 @@ pub struct NodeHwBench {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BlockProposal {
-    pub number: u64,
-    pub hash: BlockHash,
-    pub block_proposal_time: u64,
+pub struct BlockMetrics {
+    pub proposal_timestamps: Option<(u128, u128, u64)>, // (timestamp in ms (start, end, block_number))
+    pub sync_block_start_timestamps: Option<(u128, u128, u64)>, // (timestamp in ms (start, end, block_number))
+    pub import_block_timestamps: Option<(u128, u128, u64)>, // (timestamp in ms (start, end, block_number))
 }
 
 impl Payload {

@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use common::node_message::{BlockProposal, Payload};
-use common::node_types::BlockHash;
+use common::node_message::Payload;
 use common::node_types::{Block, Timestamp};
+use common::node_types::{BlockHash, BlockMetricsDetails};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
 use once_cell::sync::Lazy;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -66,8 +66,6 @@ pub struct Chain {
     stats: ChainStats,
     /// Timestamp of when the stats were last regenerated.
     stats_last_regenerated: Instant,
-    /// Maps NodeId to BlockProposal Payload
-    block_proposals: HashMap<ChainNodeId, BlockProposal>,
 }
 
 pub enum AddNodeResult {
@@ -120,7 +118,6 @@ impl Chain {
             stats_collator: Default::default(),
             stats: Default::default(),
             stats_last_regenerated: Instant::now(),
-            block_proposals: HashMap::new(),
         }
     }
 
@@ -234,8 +231,9 @@ impl Chain {
                     self.stats_collator
                         .update_hwbench(node.hwbench(), CounterValue::Increment);
                 }
-                Payload::BlockProposal(ref prop) => {
-                    self.block_proposals.insert(nid, prop.clone());
+                Payload::BlockMetrics(ref prop) => {
+                    let metrics = BlockMetricsDetails::from(prop.clone());
+                    feed.push(feed_message::ImportedBlockMetrics(nid.into(), metrics));
                 }
                 _ => {}
             }
@@ -273,13 +271,6 @@ impl Chain {
             None => return,
         };
 
-        let mut block_proposal_time = None;
-        if let Some(entry) = self.block_proposals.get(&nid) {
-            if entry.number == block.height {
-                block_proposal_time = Some(entry.block_proposal_time);
-            }
-        }
-
         if node.update_block(*block) {
             if block.height > self.best.height {
                 self.best = *block;
@@ -307,7 +298,7 @@ impl Chain {
                 }
             }
 
-            if let Some(details) = node.update_details(now, propagation_time, block_proposal_time) {
+            if let Some(details) = node.update_details(now, propagation_time) {
                 feed.push(feed_message::ImportedBlock(nid.into(), details));
             }
         }
