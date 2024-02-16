@@ -21,7 +21,7 @@ use arrayvec::ArrayString;
 use serde::ser::{SerializeTuple, Serializer};
 use serde::{Deserialize, Serialize};
 
-use crate::node_message::BlockMetrics;
+use crate::node_message::BlockMetricsTelemetry;
 use crate::{time, MeanList};
 
 pub type BlockNumber = u64;
@@ -264,13 +264,13 @@ impl<'de> Deserialize<'de> for BlockDetails {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BlockMetricsDetail {
-    pub start: u128,
-    pub end: u128,
+    pub start: u64,
+    pub end: u64,
     pub block: u64,
-    pub duration: u128,
+    pub duration: u64,
 }
-impl From<(u128, u128, u64)> for BlockMetricsDetail {
-    fn from(value: (u128, u128, u64)) -> Self {
+impl From<(u64, u64, u64)> for BlockMetricsDetail {
+    fn from(value: (u64, u64, u64)) -> Self {
         Self {
             start: value.0,
             end: value.1,
@@ -283,17 +283,17 @@ impl From<(u128, u128, u64)> for BlockMetricsDetail {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BlockMetricsDetails {
     pub proposal: Option<BlockMetricsDetail>, // (timestamp in ms (start, end, block_number, duration))
-    pub sync_block_start: Option<BlockMetricsDetail>, // (timestamp in ms (start, end, block_number, duration))
+    pub sync_block: Option<BlockMetricsDetail>, // (timestamp in ms (start, end, block_number, duration))
     pub import_block: Option<BlockMetricsDetail>, // (timestamp in ms (start, end, block_number, duration))
 }
 
-impl From<BlockMetrics> for BlockMetricsDetails {
-    fn from(value: BlockMetrics) -> Self {
+impl From<BlockMetricsTelemetry> for BlockMetricsDetails {
+    fn from(value: BlockMetricsTelemetry) -> Self {
         let proposal = value
             .proposal_timestamps
             .map(|v| BlockMetricsDetail::from(v));
-        let sync_block_start = value
-            .sync_block_start_timestamps
+        let sync_block = value
+            .sync_block_timestamps
             .map(|v| BlockMetricsDetail::from(v));
         let import_block = value
             .import_block_timestamps
@@ -301,7 +301,7 @@ impl From<BlockMetrics> for BlockMetricsDetails {
 
         Self {
             proposal,
-            sync_block_start,
+            sync_block,
             import_block,
         }
     }

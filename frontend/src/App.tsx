@@ -116,6 +116,7 @@ export default class App extends React.Component {
       selectedColumns: this.selectedColumns(this.settings.raw()),
       tab,
       chainStats: null,
+      blockMetricsStats: {metrics: new Map(), bestBlockTimes: new Map()},
     });
     this.appState = this.appUpdate({});
 

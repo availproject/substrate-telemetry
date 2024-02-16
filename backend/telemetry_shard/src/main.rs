@@ -336,6 +336,8 @@ where
                     }
                 };
 
+                //println!("{:?}", node_message);
+
                 // Pull relevant details from the message:
                 let node_message: node_message::NodeMessage = node_message.into();
                 let message_id = node_message.id();

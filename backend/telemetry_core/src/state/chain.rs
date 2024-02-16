@@ -231,7 +231,7 @@ impl Chain {
                     self.stats_collator
                         .update_hwbench(node.hwbench(), CounterValue::Increment);
                 }
-                Payload::BlockMetrics(ref prop) => {
+                Payload::BlockMetricsTelemetry(ref prop) => {
                     let metrics = BlockMetricsDetails::from(prop.clone());
                     feed.push(feed_message::ImportedBlockMetrics(nid.into(), metrics));
                 }

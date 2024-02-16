@@ -97,6 +97,14 @@ export class Header extends React.Component<HeaderProps> {
             setDisplay={setDisplay}
           />
           <Tab
+            icon={statsIcon}
+            label="Block Metrics"
+            display="blockmetrics"
+            tab="blockmetrics"
+            current={currentTab}
+            setDisplay={setDisplay}
+          />
+          <Tab
             icon={settingsIcon}
             label="Settings"
             display="settings"

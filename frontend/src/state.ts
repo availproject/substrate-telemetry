@@ -17,6 +17,7 @@
 import * as React from 'react';
 import { Types, Maybe, SortedCollection } from './common';
 import { Column } from './components/List';
+import { BlockMetricStats } from './common/types';
 
 export const PINNED_CHAINS = {
   // Kusama
@@ -169,7 +170,6 @@ export class Node {
     this.blockTime = blockTime;
     this.blockTimestamp = blockTimestamp;
     this.propagationTime = propagationTime;
-    // todo this.proposalTime = proposalTime;
     this.stale = false;
 
     this.trigger();
@@ -280,6 +280,7 @@ export interface State {
   sortBy: Readonly<Maybe<number>>;
   selectedColumns: Column[];
   chainStats: Maybe<Types.ChainStats>;
+  blockMetricsStats: BlockMetricStats,
 }
 
 export type Update = <K extends keyof State>(

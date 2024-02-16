@@ -38,6 +38,7 @@ import {
   GenesisHash,
   AuthoritySetInfo,
   ChainStats,
+  BlockMetricDetails,
 } from './types';
 
 export const ACTIONS = {
@@ -64,6 +65,7 @@ export const ACTIONS = {
   StaleNode: 0x14 as const,
   NodeIO: 0x15 as const,
   ChainStatsUpdate: 0x16 as const,
+  ImportedBlockMetrics: 0x17 as const,
 };
 
 export type Action = typeof ACTIONS[keyof typeof ACTIONS];
@@ -115,6 +117,11 @@ interface LocatedNodeMessage extends MessageBase {
 interface ImportedBlockMessage extends MessageBase {
   action: typeof ACTIONS.ImportedBlock;
   payload: [NodeId, BlockDetails];
+}
+
+interface ImportedBlockMetricsMessage extends MessageBase {
+  action: typeof ACTIONS.ImportedBlockMetrics;
+  payload: [NodeId, BlockMetricDetails];
 }
 
 interface FinalizedBlockMessage extends MessageBase {
@@ -220,7 +227,8 @@ export type Message =
   | StaleNodeMessage
   | PongMessage
   | NodeIOMessage
-  | ChainStatsUpdate;
+  | ChainStatsUpdate
+  | ImportedBlockMetricsMessage;
 
 /**
  * Data type to be sent to the feed. Passing through strings means we can only serialize once,

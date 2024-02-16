@@ -30,6 +30,7 @@ import {
   DownloadColumn,
   StateCacheColumn,
 } from './components/List';
+import { SingleBlockMetricDetail, SingleBlockMetricDetails } from './common/types';
 
 const CONNECTION_TIMEOUT_BASE = (1000 * 5) as Types.Milliseconds; // 5 seconds
 const CONNECTION_TIMEOUT_MAX = (1000 * 60 * 5) as Types.Milliseconds; // 5 minutes
@@ -173,7 +174,6 @@ export class Connection {
 
         case ACTIONS.BestBlock: {
           const [best, blockTimestamp, blockAverage] = message.payload;
-
           nodes.mutEach((node) => node.newBestBlock());
 
           this.appUpdate({ best, blockTimestamp, blockAverage });
@@ -250,6 +250,47 @@ export class Connection {
           const [id, blockDetails] = message.payload;
 
           nodes.mutAndSort(id, (node) => node.updateBlock(blockDetails));
+
+          break;
+        }
+
+        case ACTIONS.ImportedBlockMetrics: {
+          const [id, blockMetricDetails] = message.payload;
+          
+          const blockMetricsStats = this.appState.blockMetricsStats;
+          let bestBlocks = blockMetricsStats.bestBlockTimes;
+          let user = blockMetricsStats.metrics.get(id) ?? new Map<number, SingleBlockMetricDetails>();
+
+          if (blockMetricDetails.proposal) {
+            let m = blockMetricDetails.proposal;
+            let block: SingleBlockMetricDetails = user.get(m.block) ?? {proposal: undefined, import_block: undefined, sync_block: undefined};
+            block.proposal = {start_timestamp: m.start, end_timestamp: m.end, duration: m.duration};
+            user.set(m.block, block);
+          }
+
+          if (blockMetricDetails.import_block) {
+            let m = blockMetricDetails.import_block;
+            let block: SingleBlockMetricDetails = user.get(m.block) ?? {proposal: undefined, import_block: undefined, sync_block: undefined};
+            block.import_block = {start_timestamp: m.start, end_timestamp: m.end, duration: m.duration};
+            user.set(m.block, block);
+
+            if (blockMetricDetails.proposal) {
+              let m2 = blockMetricDetails.proposal;
+              if (m2.block == m.block) {
+                bestBlocks.set(m.block, m.end);
+              }
+            }
+          }
+
+          if (blockMetricDetails.sync_block) {
+            let m = blockMetricDetails.sync_block;
+            let block: SingleBlockMetricDetails = user.get(m.block) ?? {proposal: undefined, import_block: undefined, sync_block: undefined};
+            block.sync_block = {start_timestamp: m.start, end_timestamp: m.end, duration: m.duration};
+            user.set(m.block, block);
+          }
+
+          blockMetricsStats.metrics.set(id, user);
+          this.appUpdate({blockMetricsStats})
 
           break;
         }

@@ -24,12 +24,12 @@ import {
 } from '../../state';
 import { getHashData } from '../../utils';
 import { Header } from './';
-import { List, Map, Settings, Stats } from '../';
+import { List, Map, Settings, Stats, BlockMetrics } from '../';
 import { Persistent, PersistentObject, PersistentSet } from '../../persist';
 
 import './Chain.css';
 
-export type ChainDisplay = 'list' | 'map' | 'settings' | 'consensus' | 'stats';
+export type ChainDisplay = 'list' | 'map' | 'settings' | 'consensus' | 'stats' | 'blockmetrics';
 
 interface ChainProps {
   appState: Readonly<AppState>;
@@ -112,6 +112,10 @@ export class Chain extends React.Component<ChainProps, ChainState> {
 
     if (display === 'stats') {
       return <Stats appState={appState} />;
+    }
+
+    if (display === 'blockmetrics') {
+      return <BlockMetrics appState={appState} />;
     }
 
     throw new Error('invalid `display`: ${display}');

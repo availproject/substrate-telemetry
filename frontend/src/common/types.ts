@@ -113,3 +113,34 @@ export type ChainStats = {
   disk_random_write_score: Maybe<Ranking<Range>>;
   cpu_vendor: Maybe<Ranking<string>>;
 };
+
+export type BlockMetricDetail = {
+  start: number,
+  end: number,
+  block: number
+  duration: number,
+}
+
+export type BlockMetricDetails = {
+  proposal: Maybe<BlockMetricDetail>,
+  sync_block: Maybe<BlockMetricDetail>,
+  import_block: Maybe<BlockMetricDetail>,
+}
+
+
+export type SingleBlockMetricDetail = {
+  start_timestamp: number,
+  end_timestamp: number,
+  duration: number,
+}
+
+export type SingleBlockMetricDetails = {
+  proposal: Maybe<SingleBlockMetricDetail>,
+  sync_block: Maybe<SingleBlockMetricDetail>,
+  import_block: Maybe<SingleBlockMetricDetail>,
+}
+
+export type BlockMetricStats = {
+  metrics: Map<NodeId, Map<number, SingleBlockMetricDetails>>
+  bestBlockTimes: Map<number, number>
+}

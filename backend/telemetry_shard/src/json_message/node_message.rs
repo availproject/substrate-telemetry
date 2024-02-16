@@ -79,7 +79,7 @@ pub enum Payload {
     #[serde(rename = "sysinfo.hwbench")]
     HwBench(NodeHwBench),
     #[serde(rename = "block.metrics")]
-    BlockMetrics(BlockMetrics),
+    BlockMetricsTelemetry(BlockMetricsTelemetry),
 }
 
 impl From<Payload> for internal::Payload {
@@ -91,23 +91,23 @@ impl From<Payload> for internal::Payload {
             Payload::NotifyFinalized(m) => internal::Payload::NotifyFinalized(m.into()),
             Payload::AfgAuthoritySet(m) => internal::Payload::AfgAuthoritySet(m.into()),
             Payload::HwBench(m) => internal::Payload::HwBench(m.into()),
-            Payload::BlockMetrics(m) => internal::Payload::BlockMetrics(m.into()),
+            Payload::BlockMetricsTelemetry(m) => internal::Payload::BlockMetricsTelemetry(m.into()),
         }
     }
 }
 
 #[derive(Deserialize, Debug)]
-pub struct BlockMetrics {
-    pub proposal_timestamps: Option<(u128, u128, u64)>, // (timestamp in ms (start, end, block_number))
-    pub sync_block_start_timestamps: Option<(u128, u128, u64)>, // (timestamp in ms (start, end, block_number))
-    pub import_block_timestamps: Option<(u128, u128, u64)>, // (timestamp in ms (start, end, block_number))
+pub struct BlockMetricsTelemetry {
+    pub proposal_timestamps: Option<(u64, u64, u64)>, // (timestamp in ms (start, end, block_number))
+    pub sync_block_timestamps: Option<(u64, u64, u64)>, // (timestamp in ms (start, end, block_number))
+    pub import_block_timestamps: Option<(u64, u64, u64)>, // (timestamp in ms (start, end, block_number))
 }
 
-impl From<BlockMetrics> for internal::BlockMetrics {
-    fn from(msg: BlockMetrics) -> Self {
-        internal::BlockMetrics {
+impl From<BlockMetricsTelemetry> for internal::BlockMetricsTelemetry {
+    fn from(msg: BlockMetricsTelemetry) -> Self {
+        Self {
             proposal_timestamps: msg.proposal_timestamps,
-            sync_block_start_timestamps: msg.sync_block_start_timestamps,
+            sync_block_timestamps: msg.sync_block_timestamps,
             import_block_timestamps: msg.import_block_timestamps,
         }
     }
