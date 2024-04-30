@@ -63,6 +63,7 @@ pub struct NodeOverview {
     pub name: String,
     pub version: String,
     pub peer_count: u64,
+    pub start_up_time: u64,
 }
 
 /// An incoming shard connection can send these messages to the aggregator.
@@ -300,6 +301,7 @@ impl InnerLoop {
                     name: node.details().name.clone().into_string(),
                     version: node.details().version.clone().into_string(),
                     peer_count: node.stats().peers,
+                    start_up_time: node.startup_time().unwrap_or(0),
                 });
             }
 
