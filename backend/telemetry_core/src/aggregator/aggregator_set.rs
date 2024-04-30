@@ -1,5 +1,6 @@
 use super::aggregator::{Aggregator, AggregatorOpts};
-use super::inner_loop;
+use super::inner_loop::{self, NodeOverview};
+use common::node_types::BlockHash;
 use common::EitherSink;
 use futures::{Sink, SinkExt};
 use inner_loop::{FromShardWebsocket, Metrics};
@@ -131,5 +132,17 @@ impl AggregatorSet {
         let this_idx = (last_val + 1) % self.0.aggregators.len();
 
         self.0.aggregators[this_idx].subscribe_feed()
+    }
+
+    pub async fn gather_nodes(&self, block_hash: BlockHash) -> anyhow::Result<Vec<NodeOverview>> {
+        let mut nodes = Vec::new();
+        for aggregator in &self.0.aggregators {
+            let read_nodes = aggregator.gather_nodes(block_hash).await?;
+            if read_nodes.len() > nodes.len() {
+                nodes = read_nodes;
+            }
+        }
+
+        Ok(nodes)
     }
 }

@@ -41,6 +41,28 @@ pub enum ToAggregator {
     /// Hand back some metrics. The provided sender is expected not to block when
     /// a message is sent into it.
     GatherMetrics(flume::Sender<Metrics>),
+    FromInternal(FromInternal, flume::Sender<ToInternal>),
+}
+
+#[derive(Clone, Debug)]
+pub enum FromInternal {
+    GatherNodes { chain: BlockHash },
+}
+
+#[derive(Clone, Debug)]
+pub enum ToInternal {
+    GatherNodes(Vec<NodeOverview>),
+    Error,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct NodeOverview {
+    pub timestamp: u64,
+    pub best_block_height: u64,
+    pub best_block_hash: BlockHash,
+    pub name: String,
+    pub version: String,
+    pub peer_count: u64,
 }
 
 /// An incoming shard connection can send these messages to the aggregator.
@@ -226,6 +248,7 @@ impl InnerLoop {
                         dropped_messages2.load(Ordering::Relaxed),
                         total_messages2.load(Ordering::Relaxed),
                     ),
+                    ToAggregator::FromInternal(data, rx) => self.handle_inner_messages(data, rx),
                 }
             }
         });
@@ -255,7 +278,36 @@ impl InnerLoop {
         }
     }
 
-    /// Gather and return some metrics.
+    fn handle_inner_messages(&mut self, data: FromInternal, rx: flume::Sender<ToInternal>) {
+        #[allow(irrefutable_let_patterns)]
+        if let FromInternal::GatherNodes { chain } = data {
+            let Some(chain) = self.node_state.get_chain_by_genesis_hash(&chain) else {
+                _ = rx.send(ToInternal::Error);
+                return;
+            };
+
+            let nodes = chain.nodes_slice();
+            let mut overview: Vec<NodeOverview> = Vec::with_capacity(nodes.iter().count());
+            for node in nodes {
+                let Some(node) = node else {
+                    continue;
+                };
+
+                overview.push(NodeOverview {
+                    timestamp: node.best_timestamp(),
+                    best_block_height: node.best().height,
+                    best_block_hash: node.best().hash,
+                    name: node.details().name.clone().into_string(),
+                    version: node.details().version.clone().into_string(),
+                    peer_count: node.stats().peers,
+                });
+            }
+
+            _ = rx.send(ToInternal::GatherNodes(overview));
+        }
+    }
+
+    /// Gather and return some metrics.\
     fn handle_gather_metrics(
         &mut self,
         rx: flume::Sender<Metrics>,

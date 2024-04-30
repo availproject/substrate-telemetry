@@ -18,6 +18,8 @@ mod aggregator;
 mod feed_message;
 mod find_location;
 mod state;
+use hyper::Body;
+use primitive_types::H256;
 use std::str::FromStr;
 use tokio::time::{Duration, Instant};
 
@@ -146,6 +148,21 @@ async fn start_server(num_aggregators: usize, opts: Opts) -> anyhow::Result<()> 
     let server = http_utils::start_server(socket_addr, move |addr, req| {
         let aggregator = aggregator.clone();
         async move {
+            let default_response = || {
+                Ok(Response::builder()
+                    .status(404)
+                    .body("Not found".into())
+                    .unwrap())
+            };
+
+            let error_response = move |message: &str| {
+                let message = std::format!("\"error\": \"{}\"", message);
+                Ok(Response::builder()
+                    .status(404)
+                    .body(Body::from(message))
+                    .unwrap())
+            };
+
             match (req.method(), req.uri().path().trim_end_matches('/')) {
                 // Check that the server is up and running:
                 (&Method::GET, "/health") => Ok(Response::new("OK".into())),
@@ -197,11 +214,33 @@ async fn start_server(num_aggregators: usize, opts: Opts) -> anyhow::Result<()> 
                 }
                 // Return metrics in a prometheus-friendly text based format:
                 (&Method::GET, "/metrics") => Ok(return_prometheus_metrics(aggregator).await),
+                (&Method::GET, uri) => {
+                    if uri.contains("/nodes_overview/") {
+                        let block_hash_string = uri.split('/').last();
+                        let Some(block_hash_string) = block_hash_string else {
+                            return error_response("Failed to split string");
+                        };
+
+                        let Ok(block_hash) = block_hash_string.parse::<H256>() else {
+                            return error_response("Cannot convert given block hash to H256");
+                        };
+
+                        let result = aggregator.gather_nodes(block_hash).await;
+                        let Ok(result) = result else {
+                            return error_response("Failed to find data");
+                        };
+
+                        let Ok(result) = serde_json::to_string(&result) else {
+                            return error_response("Failed to do json");
+                        };
+
+                        return Ok(Response::builder().body(result.into()).unwrap());
+                    }
+
+                    default_response()
+                }
                 // 404 for anything else:
-                _ => Ok(Response::builder()
-                    .status(404)
-                    .body("Not found".into())
-                    .unwrap()),
+                _ => default_response(),
             }
         }
     });
