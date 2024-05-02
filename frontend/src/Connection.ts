@@ -366,6 +366,14 @@ export class Connection {
           break;
         }
 
+        case ACTIONS.BlockMetricsReceived: {
+          const [id, proposalTime, syncTime, importTime] = message.payload;
+
+          nodes.mut(id, (node) => node.updateBlockMetrics(proposalTime, syncTime, importTime));
+
+          break;
+        }
+
         default: {
           break;
         }

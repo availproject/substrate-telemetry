@@ -231,6 +231,44 @@ impl Chain {
                     self.stats_collator
                         .update_hwbench(node.hwbench(), CounterValue::Increment);
                 }
+                Payload::BlockMetric(ref prop) => {
+                    let best_block_hash = node.block_details().block.hash;
+
+                    for block_interval in &prop.block_intervals {
+                        let block_height = block_interval.block_number as u32;
+
+                        let Ok(block_hash) = block_interval.block_hash.parse::<BlockHash>() else {
+                            continue;
+                        };
+
+                        for interval in &block_interval.intervals {
+                            let duration = interval
+                                .end_timestamp
+                                .saturating_sub(interval.start_timestamp);
+                            println!("{:?}", interval.start_timestamp);
+                            println!("{:?}", interval.end_timestamp);
+
+                            node.insert_historical_block_data(
+                                block_hash,
+                                block_height,
+                                duration,
+                                interval.kind,
+                            );
+
+                            if block_hash == best_block_hash {
+                                node.insert_block_details_interval(duration, interval.kind);
+                            }
+                        }
+                    }
+
+                    let details = node.block_details();
+                    feed.push(feed_message::BlockMetricsReceived(
+                        nid.into(),
+                        details.proposal_time,
+                        details.sync_time,
+                        details.import_time,
+                    ));
+                }
                 _ => {}
             }
 

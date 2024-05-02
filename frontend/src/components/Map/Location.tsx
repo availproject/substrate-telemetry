@@ -102,6 +102,9 @@ export class Location extends React.Component<LocationProps, LocationState> {
       blockTime,
       blockTimestamp,
       propagationTime,
+      proposalTime,
+      syncTime,
+      importTime,
       city,
     } = this.props.node;
 
@@ -171,6 +174,24 @@ export class Location extends React.Component<LocationProps, LocationState> {
             </td>
             <td style={{ width: 58 }}>
               {propagationTime == null ? '∞' : milliOrSecond(propagationTime)}
+            </td>
+            <td title="Block Proposal Time">
+              <Icon src={blockTimeIcon} />
+            </td>
+            <td style={{ width: 58 }}>
+              {proposalTime == null ? '∞' : milliOrSecond(proposalTime)}
+            </td>
+            <td title="Block Sync Time">
+              <Icon src={blockTimeIcon} />
+            </td>
+            <td style={{ width: 58 }}>
+              {syncTime == null ? '∞' : milliOrSecond(syncTime)}
+            </td>
+            <td title="Block Import Time">
+              <Icon src={blockTimeIcon} />
+            </td>
+            <td style={{ width: 58 }}>
+              {importTime == null ? '∞' : milliOrSecond(importTime)}
             </td>
             <td title="Last Block Time">
               <Icon src={lastTimeIcon} />

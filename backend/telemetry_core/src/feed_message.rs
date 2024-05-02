@@ -123,6 +123,7 @@ actions! {
     20: StaleNode,
     21: NodeIOUpdate<'_>,
     22: ChainStatsUpdate<'_>,
+    23: BlockMetricsReceived,
 }
 
 #[derive(Serialize)]
@@ -144,6 +145,14 @@ pub struct LocatedNode<'a>(pub FeedNodeId, pub f32, pub f32, pub &'a str);
 
 #[derive(Serialize)]
 pub struct ImportedBlock<'a>(pub FeedNodeId, pub &'a BlockDetails);
+
+#[derive(Serialize)]
+pub struct BlockMetricsReceived(
+    pub FeedNodeId,
+    pub Option<u64>,
+    pub Option<u64>,
+    pub Option<u64>,
+);
 
 #[derive(Serialize)]
 pub struct FinalizedBlock(pub FeedNodeId, pub BlockNumber, pub BlockHash);

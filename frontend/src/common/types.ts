@@ -48,7 +48,10 @@ export type BlockDetails = [
   BlockHash,
   Milliseconds,
   Timestamp,
-  Maybe<PropagationTime>
+  Maybe<PropagationTime>,
+  Maybe<Milliseconds>,
+  Maybe<Milliseconds>,
+  Maybe<Milliseconds>,
 ];
 export type NodeDetails = [
   NodeName,

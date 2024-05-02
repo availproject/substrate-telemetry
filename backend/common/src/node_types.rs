@@ -214,6 +214,9 @@ pub struct BlockDetails {
     pub block_time: u64,
     pub block_timestamp: u64,
     pub propagation_time: Option<u64>,
+    pub proposal_time: Option<u64>,
+    pub sync_time: Option<u64>,
+    pub import_time: Option<u64>,
 }
 
 impl Default for BlockDetails {
@@ -223,6 +226,9 @@ impl Default for BlockDetails {
             block_timestamp: time::now(),
             block_time: 0,
             propagation_time: None,
+            proposal_time: None,
+            sync_time: None,
+            import_time: None,
         }
     }
 }
@@ -238,6 +244,9 @@ impl Serialize for BlockDetails {
         tup.serialize_element(&self.block_time)?;
         tup.serialize_element(&self.block_timestamp)?;
         tup.serialize_element(&self.propagation_time)?;
+        tup.serialize_element(&self.proposal_time)?;
+        tup.serialize_element(&self.sync_time)?;
+        tup.serialize_element(&self.import_time)?;
         tup.end()
     }
 }
@@ -247,7 +256,16 @@ impl<'de> Deserialize<'de> for BlockDetails {
     where
         D: serde::Deserializer<'de>,
     {
-        let tup = <(u64, BlockHash, u64, u64, Option<u64>)>::deserialize(deserializer)?;
+        let tup = <(
+            u64,
+            BlockHash,
+            u64,
+            u64,
+            Option<u64>,
+            Option<u64>,
+            Option<u64>,
+            Option<u64>,
+        )>::deserialize(deserializer)?;
         Ok(BlockDetails {
             block: Block {
                 height: tup.0,
@@ -256,6 +274,9 @@ impl<'de> Deserialize<'de> for BlockDetails {
             block_time: tup.2,
             block_timestamp: tup.3,
             propagation_time: tup.4,
+            proposal_time: tup.5,
+            sync_time: tup.6,
+            import_time: tup.7,
         })
     }
 }

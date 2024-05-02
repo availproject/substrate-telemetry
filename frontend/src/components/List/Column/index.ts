@@ -33,3 +33,6 @@ export * from './BlockTimeColumn';
 export * from './BlockPropagationColumn';
 export * from './LastBlockColumn';
 export * from './UptimeColumn';
+export * from './BlockProposalTimeColumn';
+export * from './BlockSyncTimeColumn';
+export * from './BlockImportTimeColumn';

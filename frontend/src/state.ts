@@ -17,6 +17,7 @@
 import * as React from 'react';
 import { Types, Maybe, SortedCollection } from './common';
 import { Column } from './components/List';
+import { Milliseconds } from './common/types';
 
 export const PINNED_CHAINS = {
   // Kusama
@@ -80,6 +81,9 @@ export class Node {
   public blockTime: Types.Milliseconds;
   public blockTimestamp: Types.Timestamp;
   public propagationTime: Maybe<Types.PropagationTime>;
+  public proposalTime: Maybe<Types.Milliseconds>;
+  public syncTime: Maybe<Types.Milliseconds>;
+  public importTime: Maybe<Types.Milliseconds>;
 
   public finalized = 0 as Types.BlockNumber;
   public finalizedHash = '' as Types.BlockHash;
@@ -158,14 +162,23 @@ export class Node {
     this.trigger();
   }
 
+  public updateBlockMetrics(proposalTime: Maybe<Milliseconds>, syncTime: Maybe<Milliseconds>, importTime: Maybe<Milliseconds>, ) {
+    this.proposalTime = proposalTime;
+    this.syncTime = syncTime;
+    this.importTime = importTime;
+
+    this.trigger();
+  }
+
   public updateBlock(block: Types.BlockDetails) {
-    const [height, hash, blockTime, blockTimestamp, propagationTime] = block;
+    const [height, hash, blockTime, blockTimestamp, propagationTime, proposalTime, syncTime, importTime] = block;
 
     this.height = height;
     this.hash = hash;
     this.blockTime = blockTime;
     this.blockTimestamp = blockTimestamp;
     this.propagationTime = propagationTime;
+    this.updateBlockMetrics(null, null, null);
     this.stale = false;
 
     this.trigger();
@@ -255,6 +268,9 @@ export interface StateSettings {
   blockpropagation: boolean;
   blocklasttime: boolean;
   uptime: boolean;
+  blockproposal: boolean;
+  blocksync: boolean;
+  blockimport: boolean;
 }
 
 export interface State {

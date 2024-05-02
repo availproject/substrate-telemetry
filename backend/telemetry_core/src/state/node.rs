@@ -14,13 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use std::collections::VecDeque;
+
 use crate::find_location;
-use common::node_message::SystemInterval;
+use common::node_message::{IntervalKind, SystemInterval};
 use common::node_types::{
     Block, BlockDetails, NodeDetails, NodeHardware, NodeHwBench, NodeIO, NodeLocation, NodeStats,
     Timestamp,
 };
 use common::time;
+use primitive_types::H256;
 
 /// Minimum time between block below broadcasting updates to the browser gets throttled, in ms.
 const THROTTLE_THRESHOLD: u64 = 100;
@@ -50,6 +53,8 @@ pub struct Node {
     startup_time: Option<Timestamp>,
     /// Hardware benchmark results for the node
     hwbench: Option<NodeHwBench>,
+    /// TODO
+    historical_data: HistoricalData,
 }
 
 impl Node {
@@ -71,6 +76,7 @@ impl Node {
             stale: false,
             startup_time,
             hwbench: None,
+            historical_data: HistoricalData::default(),
         }
     }
 
@@ -141,6 +147,9 @@ impl Node {
         self.best.block_time = timestamp - self.best.block_timestamp;
         self.best.block_timestamp = timestamp;
         self.best.propagation_time = propagation_time;
+        self.best.sync_time = None;
+        self.best.proposal_time = None;
+        self.best.import_time = None;
 
         if self.throttle < timestamp {
             if self.best.block_time <= THROTTLE_THRESHOLD {
@@ -237,4 +246,98 @@ impl Node {
     pub fn startup_time(&self) -> Option<Timestamp> {
         self.startup_time
     }
+
+    pub fn insert_block_details_interval(&mut self, duration: u64, kind: IntervalKind) {
+        match kind {
+            IntervalKind::Proposal => {
+                self.best.proposal_time = Some(duration);
+            }
+            IntervalKind::Sync => {
+                self.best.sync_time = Some(duration);
+            }
+            IntervalKind::Import => {
+                self.best.import_time = Some(duration);
+            }
+        }
+    }
+
+    pub fn insert_historical_block_data(
+        &mut self,
+        block_hash: H256,
+        block_height: u32,
+        duration: u64,
+        kind: IntervalKind,
+    ) {
+        self.historical_data
+            .insert_block_time(duration, block_hash, block_height, kind);
+    }
+}
+
+#[derive(Default)]
+pub struct HistoricalData {
+    blocks: VecDeque<BlockHistoricalData>,
+}
+
+impl HistoricalData {
+    pub fn insert_block_time(
+        &mut self,
+        value: u64,
+        block_hash: H256,
+        block_height: u32,
+        kind: IntervalKind,
+    ) {
+        let block = self.get_or_insert_block_mut(block_hash, block_height);
+        match kind {
+            IntervalKind::Proposal => {
+                block.proposal_time = Some(value);
+            }
+            IntervalKind::Sync => {
+                block.sync_time = Some(value);
+            }
+            IntervalKind::Import => {
+                block.import_time = Some(value);
+            }
+        }
+    }
+
+    fn new_block(&mut self, block_hash: H256, block_height: u32) {
+        const MAX_QUEUE_SIZE: usize = 128;
+
+        if self.blocks.len() > MAX_QUEUE_SIZE {
+            self.blocks.pop_front();
+        }
+
+        self.blocks.push_back(BlockHistoricalData {
+            block_hash,
+            block_height,
+            ..Default::default()
+        });
+    }
+
+    fn get_or_insert_block_mut(
+        &mut self,
+        block_hash: H256,
+        block_height: u32,
+    ) -> &mut BlockHistoricalData {
+        let index = self
+            .blocks
+            .iter()
+            .position(|b| b.block_hash == b.block_hash);
+
+        if let Some(index) = index {
+            self.blocks.get_mut(index).unwrap()
+        } else {
+            self.new_block(block_hash, block_height);
+            self.blocks.back_mut().unwrap()
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct BlockHistoricalData {
+    pub block_height: u32,
+    pub block_hash: H256,
+    pub proposal_time: Option<u64>,
+    pub sync_time: Option<u64>,
+    pub import_time: Option<u64>,
 }
