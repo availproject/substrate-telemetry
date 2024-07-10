@@ -64,7 +64,7 @@ export const ACTIONS = {
   StaleNode: 0x14 as const,
   NodeIO: 0x15 as const,
   ChainStatsUpdate: 0x16 as const,
-  BlockMetricsReceived: 0x17 as const,
+  ChainOverviewUpdate: 0x17 as const,
 };
 
 export type Action = typeof ACTIONS[keyof typeof ACTIONS];
@@ -116,11 +116,6 @@ interface LocatedNodeMessage extends MessageBase {
 interface ImportedBlockMessage extends MessageBase {
   action: typeof ACTIONS.ImportedBlock;
   payload: [NodeId, BlockDetails];
-}
-
-interface BlockMetricsReceivedMessage extends MessageBase {
-  action: typeof ACTIONS.BlockMetricsReceived;
-  payload: [NodeId,  Maybe<Milliseconds>,  Maybe<Milliseconds>,  Maybe<Milliseconds>];
 }
 
 interface FinalizedBlockMessage extends MessageBase {
@@ -203,6 +198,11 @@ interface ChainStatsUpdate extends MessageBase {
   payload: ChainStats;
 }
 
+interface ChainOverviewReceivedMessage extends MessageBase {
+  action: typeof ACTIONS.ChainOverviewUpdate;
+  payload: string;
+}
+
 export type Message =
   | FeedVersionMessage
   | BestBlockMessage
@@ -227,7 +227,7 @@ export type Message =
   | PongMessage
   | NodeIOMessage
   | ChainStatsUpdate
-  | BlockMetricsReceivedMessage;
+  | ChainOverviewReceivedMessage;
 
 /**
  * Data type to be sent to the feed. Passing through strings means we can only serialize once,

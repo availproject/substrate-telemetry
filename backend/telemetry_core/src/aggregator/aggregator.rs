@@ -14,11 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::inner_loop::{self, NodeOverview};
+use super::inner_loop::{self};
 use crate::find_location::find_location;
 use crate::state::NodeId;
 use common::id_type;
-use common::node_types::BlockHash;
 use futures::{future, Sink, SinkExt};
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU64;
@@ -164,20 +163,5 @@ impl Aggregator {
                 ))
             })),
         )
-    }
-
-    pub async fn gather_nodes(&self, block_hash: BlockHash) -> anyhow::Result<Vec<NodeOverview>> {
-        use inner_loop::*;
-
-        let (tx, rx) = flume::unbounded();
-        let msg = ToAggregator::FromInternal(FromInternal::GatherNodes { chain: block_hash }, tx);
-
-        self.0.tx_to_aggregator.send_async(msg).await?;
-        let result = rx.recv_async().await?;
-        let ToInternal::GatherNodes(node_information) = result else {
-            return Ok(vec![]);
-        };
-
-        Ok(node_information)
     }
 }

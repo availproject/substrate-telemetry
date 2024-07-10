@@ -18,7 +18,7 @@ import * as React from 'react';
 import { Connection } from '../Connection';
 import { Icon } from './Icon';
 import { Types, Maybe } from '../common';
-import { ChainData } from '../state';
+import { ChainData, Update } from '../state';
 import { viewport } from '../utils';
 
 import githubIcon from '../icons/mark-github.svg';
@@ -30,6 +30,7 @@ interface ChainsProps {
   subscribedHash: Maybe<Types.GenesisHash>;
   subscribedData: Maybe<ChainData>;
   connection: Promise<Connection>;
+  appUpdate: Update;
 }
 
 // Average tab width in pixels
@@ -58,7 +59,7 @@ export class Chains extends React.Component<ChainsProps> {
     this.subscribedChainInView = false;
 
     const viewportWidth = viewport().width;
-    const { chains, subscribedHash, subscribedData } = this.props;
+    const { chains, subscribedHash, subscribedData, appUpdate } = this.props;
 
     const renderedChains = chains
       .slice(0, (viewportWidth / AVERAGE_TAB_WIDTH) | 0)
@@ -74,6 +75,10 @@ export class Chains extends React.Component<ChainsProps> {
           {this.renderChain(subscribedData)}
         </div>
       ) : null;
+
+    const triggerOverview = () => {
+      this.props.appUpdate({showChainOverview: true});
+    }
 
     return (
       <div className="Chains">
@@ -95,6 +100,7 @@ export class Chains extends React.Component<ChainsProps> {
         >
           <Icon src={githubIcon} />
         </a>
+        <button onClick={triggerOverview}>Stats</button>
       </div>
     );
   }

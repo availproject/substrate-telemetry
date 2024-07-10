@@ -38,9 +38,6 @@ import {
   BlockPropagationColumn,
   LastBlockColumn,
   UptimeColumn,
-  BlockProposalTimeColumn,
-  BlockSyncTimeColumn,
-  BlockImportTimeColumn,
 } from './';
 
 import './Row.css';
@@ -75,9 +72,6 @@ export class Row extends React.Component<RowProps, RowState> {
     BlockPropagationColumn,
     LastBlockColumn,
     UptimeColumn,
-    BlockProposalTimeColumn,
-    BlockSyncTimeColumn,
-    BlockImportTimeColumn,
   ];
 
   private renderedChangeRef = 0;

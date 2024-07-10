@@ -71,9 +71,6 @@ export default class App extends React.Component {
         blockpropagation: true,
         blocklasttime: false,
         uptime: false,
-        blockproposal: true,
-        blocksync: true,
-        blockimport: true,
       },
       (settings) => {
         const selectedColumns = this.selectedColumns(settings);
@@ -116,6 +113,8 @@ export default class App extends React.Component {
       selectedColumns: this.selectedColumns(this.settings.raw()),
       tab,
       chainStats: null,
+      chainOverview: "",
+      showChainOverview: false,
     });
     this.appState = this.appUpdate({});
 
@@ -132,13 +131,19 @@ export default class App extends React.Component {
   }
 
   public render() {
-    const { timeDiff, subscribed, status, tab } = this.appState;
+    const { timeDiff, subscribed, status, tab, showChainOverview, chainOverview } = this.appState;
     const chains = this.chains();
     const subscribedData = subscribed
       ? this.appState.chains.get(subscribed)
       : null;
 
     Ago.timeDiff = timeDiff;
+
+    if (showChainOverview) {
+      return (
+        <div><pre> {chainOverview} </pre></div>
+      )
+    }
 
     if (chains.length === 0) {
       return (
@@ -166,6 +171,7 @@ export default class App extends React.Component {
           subscribedHash={subscribed}
           subscribedData={subscribedData}
           connection={this.connection}
+          appUpdate={this.appUpdate}
         />
         <Chain
           appState={this.appState}
