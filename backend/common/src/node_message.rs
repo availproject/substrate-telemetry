@@ -61,6 +61,48 @@ pub enum Payload {
     NotifyFinalized(Finalized),
     AfgAuthoritySet(AfgAuthoritySet),
     HwBench(NodeHwBench),
+    BlockMetric(BlockMetricsFromNode),
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum IntervalKind {
+    /// Tells us how long it took us to produce a block. Basically it's all about
+    /// taking transactions from the mem pool and executing them.
+    Proposal = 0,
+    /// Tells us how long it took to get a block from someone.
+    Sync = 1,
+    /// Tells us how long it took to import a block.
+    /// Import is measured for the node that produced the block as well as for the
+    /// node that requested that block.
+    Import = 2,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IntervalFromNode {
+    pub kind: IntervalKind,
+    pub start_timestamp: u64,
+    pub end_timestamp: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BlockIntervalFromNode {
+    pub block_number: u64,
+    pub block_hash: String,
+    pub intervals: Vec<IntervalFromNode>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BlockRequestsDetail {
+    pub current_queue_size: u32,
+    pub requests_handled: u32,
+    pub time_frame: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BlockMetricsFromNode {
+    pub block_intervals: Vec<BlockIntervalFromNode>,
+    pub block_requests: Vec<BlockRequestsDetail>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -41,18 +41,6 @@ pub enum ToAggregator {
     /// Hand back some metrics. The provided sender is expected not to block when
     /// a message is sent into it.
     GatherMetrics(flume::Sender<Metrics>),
-    FromInternal(FromInternal, flume::Sender<ToInternal>),
-}
-
-#[derive(Clone, Debug)]
-pub enum FromInternal {
-    GatherNodes { chain: BlockHash },
-}
-
-#[derive(Clone, Debug)]
-pub enum ToInternal {
-    GatherNodes(Vec<NodeOverview>),
-    Error,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -64,6 +52,24 @@ pub struct NodeOverview {
     pub version: String,
     pub peer_count: u64,
     pub start_up_time: u64,
+}
+
+#[derive(Clone, Debug, serde::Serialize, Default)]
+pub struct BlockMetricOverview {
+    pub block_heigh: u32,
+    pub block_hash: BlockHash,
+    pub proposal_time: Vec<(String, u64, u64, u64)>,
+    pub sync_time: Vec<BlockMetricIntervalOverview>,
+    pub import_time: Vec<BlockMetricIntervalOverview>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, Default)]
+pub struct BlockMetricIntervalOverview {
+    pub node_name: String,
+    pub start_timestamp: u64,
+    pub end_timestamp: u64,
+    pub duration: u64,
+    pub start_timestamp_delay: u64,
 }
 
 /// An incoming shard connection can send these messages to the aggregator.
@@ -249,7 +255,6 @@ impl InnerLoop {
                         dropped_messages2.load(Ordering::Relaxed),
                         total_messages2.load(Ordering::Relaxed),
                     ),
-                    ToAggregator::FromInternal(data, rx) => self.handle_inner_messages(data, rx),
                 }
             }
         });
@@ -279,8 +284,7 @@ impl InnerLoop {
         }
     }
 
-    fn handle_inner_messages(&mut self, data: FromInternal, rx: flume::Sender<ToInternal>) {
-        #[allow(irrefutable_let_patterns)]
+    /*     fn handle_inner_messages(&mut self, data: FromInternal, rx: flume::Sender<ToInternal>) {
         if let FromInternal::GatherNodes { chain } = data {
             let Some(chain) = self.node_state.get_chain_by_genesis_hash(&chain) else {
                 _ = rx.send(ToInternal::Error);
@@ -307,7 +311,7 @@ impl InnerLoop {
 
             _ = rx.send(ToInternal::GatherNodes(overview));
         }
-    }
+    } */
 
     /// Gather and return some metrics.\
     fn handle_gather_metrics(

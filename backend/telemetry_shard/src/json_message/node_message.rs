@@ -78,6 +78,8 @@ pub enum Payload {
     AfgAuthoritySet(AfgAuthoritySet),
     #[serde(rename = "sysinfo.hwbench")]
     HwBench(NodeHwBench),
+    #[serde(rename = "block.metrics")]
+    BlockMetric(internal::BlockMetricsFromNode),
 }
 
 impl From<Payload> for internal::Payload {
@@ -89,6 +91,7 @@ impl From<Payload> for internal::Payload {
             Payload::NotifyFinalized(m) => internal::Payload::NotifyFinalized(m.into()),
             Payload::AfgAuthoritySet(m) => internal::Payload::AfgAuthoritySet(m.into()),
             Payload::HwBench(m) => internal::Payload::HwBench(m.into()),
+            Payload::BlockMetric(m) => internal::Payload::BlockMetric(m),
         }
     }
 }

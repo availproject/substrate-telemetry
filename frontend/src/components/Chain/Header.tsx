@@ -104,6 +104,14 @@ export class Header extends React.Component<HeaderProps> {
             current={currentTab}
             setDisplay={setDisplay}
           />
+          <Tab
+            icon={statsIcon}
+            label="Overview"
+            display="overview"
+            tab="overview"
+            current={currentTab}
+            setDisplay={setDisplay}
+          />
         </div>
       </div>
     );

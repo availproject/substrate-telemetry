@@ -14,14 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use common::node_message::Payload;
-use common::node_types::BlockHash;
-use common::node_types::{Block, Timestamp};
+use common::node_message::{IntervalKind, Payload};
+use common::node_types::{Block, NodeDetails, NodeStats, Timestamp};
+use common::node_types::{BlockHash, BlockNumber};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
 use once_cell::sync::Lazy;
-use std::collections::HashSet;
+use serde::Serialize;
+use std::collections::{HashSet, VecDeque};
 use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::feed_message::{self, ChainStats, FeedMessageSerializer};
 use crate::find_location;
@@ -66,6 +67,8 @@ pub struct Chain {
     stats: ChainStats,
     /// Timestamp of when the stats were last regenerated.
     stats_last_regenerated: Instant,
+    /// chain block history
+    overview: ChainOverview,
 }
 
 pub enum AddNodeResult {
@@ -118,6 +121,7 @@ impl Chain {
             stats_collator: Default::default(),
             stats: Default::default(),
             stats_last_regenerated: Instant::now(),
+            overview: ChainOverview::new(genesis_hash, max_nodes),
         }
     }
 
@@ -231,6 +235,43 @@ impl Chain {
                     self.stats_collator
                         .update_hwbench(node.hwbench(), CounterValue::Increment);
                 }
+                Payload::BlockMetric(ref prop) => {
+                    for block_interval in &prop.block_intervals {
+                        let block_height = block_interval.block_number as u32;
+
+                        let Ok(block_hash) = block_interval.block_hash.parse::<BlockHash>() else {
+                            continue;
+                        };
+
+                        for interval in &block_interval.intervals {
+                            use chrono::DateTime;
+                            let start =
+                                DateTime::from_timestamp_millis(interval.start_timestamp as i64)
+                                    .unwrap_or_default();
+
+                            let end =
+                                DateTime::from_timestamp_millis(interval.end_timestamp as i64)
+                                    .unwrap_or_default();
+
+                            let duration = interval
+                                .end_timestamp
+                                .saturating_sub(interval.start_timestamp);
+
+                            let kind = interval.kind;
+
+                            self.overview.new_data(
+                                nid.0,
+                                block_hash,
+                                block_height as u64,
+                                kind,
+                                start.to_string(),
+                                end.to_string(),
+                                duration,
+                                node,
+                            );
+                        }
+                    }
+                }
                 _ => {}
             }
 
@@ -250,6 +291,19 @@ impl Chain {
                         ));
                     }
                 }
+            }
+        }
+
+        let now = std::time::SystemTime::now();
+        if let Ok(duration) = now.duration_since(self.overview.last_time_updated) {
+            if duration.as_secs() > 10 {
+                self.overview.finalized_block = self.finalized_block().clone();
+                self.overview.best_block = self.best_block().clone();
+
+                if let Ok(overview) = serde_json::to_string_pretty(&self.overview) {
+                    feed.push(feed_message::ChainOverviewUpdate(overview));
+                }
+                self.overview.last_time_updated = now;
             }
         }
     }
@@ -409,4 +463,113 @@ impl Chain {
     pub fn stats(&self) -> &ChainStats {
         &self.stats
     }
+}
+
+const MAX_BLOCKS_SIZE: usize = 10;
+
+#[derive(Serialize, Debug, Clone)]
+pub struct ChainOverview {
+    genesis_hash: BlockHash,
+    max_nodes: usize,
+    best_block: Block,
+    finalized_block: Block,
+    nodes: Vec<NodeOverview>,
+    last_time_updated: SystemTime,
+}
+
+impl ChainOverview {
+    pub fn new(genesis_hash: BlockHash, max_nodes: usize) -> Self {
+        Self {
+            genesis_hash,
+            max_nodes,
+            best_block: Block::zero(),
+            finalized_block: Block::zero(),
+            nodes: Default::default(),
+            last_time_updated: SystemTime::now(),
+        }
+    }
+
+    pub fn new_data(
+        &mut self,
+        node_id: usize,
+        block_hash: BlockHash,
+        block_height: BlockNumber,
+        interval_kind: IntervalKind,
+        interval_start: String,
+        interval_end: String,
+        interval_duration: u64,
+        raw_node: &Node,
+    ) {
+        let node = match self.nodes.iter_mut().find(|n| n.id == node_id) {
+            Some(n) => n,
+            None => {
+                self.nodes.push(NodeOverview {
+                    id: node_id,
+                    blocks: VecDeque::with_capacity(MAX_BLOCKS_SIZE + 5),
+                    details: raw_node.details().clone(),
+                    stats: raw_node.stats().clone(),
+                    best_block: raw_node.best().clone(),
+                    finalized_block: raw_node.finalized().clone(),
+                });
+                self.nodes.last_mut().unwrap()
+            }
+        };
+
+        node.details = raw_node.details().clone();
+        node.stats = raw_node.stats().clone();
+        node.best_block = raw_node.best().clone();
+        node.finalized_block = raw_node.finalized().clone();
+
+        let block = match node
+            .blocks
+            .iter_mut()
+            .find(|b| b.height == block_height && b.hash == block_hash)
+        {
+            Some(b) => b,
+            None => {
+                node.blocks.push_back(NodeBlock {
+                    hash: block_hash,
+                    height: block_height,
+                    data: Default::default(),
+                });
+                node.blocks.back_mut().unwrap()
+            }
+        };
+
+        block.data.push(NodeBlockStats {
+            kind: interval_kind,
+            start: interval_start,
+            end: interval_end,
+            duration_in_ms: interval_duration,
+        });
+
+        if node.blocks.len() > MAX_BLOCKS_SIZE {
+            node.blocks.pop_front();
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct NodeOverview {
+    pub id: usize,
+    pub details: NodeDetails,
+    pub stats: NodeStats,
+    pub best_block: Block,
+    pub finalized_block: Block,
+    pub blocks: VecDeque<NodeBlock>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct NodeBlock {
+    hash: BlockHash,
+    height: BlockNumber,
+    data: Vec<NodeBlockStats>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct NodeBlockStats {
+    kind: IntervalKind,
+    start: String,
+    end: String,
+    duration_in_ms: u64,
 }
