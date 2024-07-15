@@ -19,7 +19,7 @@ import { Connection } from '../Connection';
 import { Icon } from './Icon';
 import { Types, Maybe } from '../common';
 import { ChainData, Update } from '../state';
-import { viewport } from '../utils';
+import { setHashData, viewport } from '../utils';
 
 import githubIcon from '../icons/mark-github.svg';
 import listIcon from '../icons/kebab-horizontal.svg';
@@ -76,10 +76,6 @@ export class Chains extends React.Component<ChainsProps> {
         </div>
       ) : null;
 
-    const triggerOverview = () => {
-      this.props.appUpdate({showChainOverview: true});
-    }
-
     return (
       <div className="Chains">
         {subscribedChain}
@@ -100,7 +96,6 @@ export class Chains extends React.Component<ChainsProps> {
         >
           <Icon src={githubIcon} />
         </a>
-        <button onClick={triggerOverview}>Stats</button>
       </div>
     );
   }

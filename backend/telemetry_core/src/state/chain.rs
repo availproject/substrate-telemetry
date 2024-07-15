@@ -15,14 +15,14 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use common::node_message::{IntervalKind, Payload};
-use common::node_types::{Block, Timestamp};
+use common::node_types::{Block, NodeDetails, NodeStats, Timestamp};
 use common::node_types::{BlockHash, BlockNumber};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::collections::{HashSet, VecDeque};
 use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::feed_message::{self, ChainStats, FeedMessageSerializer};
 use crate::find_location;
@@ -267,12 +267,9 @@ impl Chain {
                                 start.to_string(),
                                 end.to_string(),
                                 duration,
+                                node,
                             );
                         }
-                    }
-
-                    if let Ok(a) = serde_json::to_string_pretty(&self.overview) {
-                        feed.push(feed_message::ChainOverviewUpdate(a));
                     }
                 }
                 _ => {}
@@ -294,6 +291,19 @@ impl Chain {
                         ));
                     }
                 }
+            }
+        }
+
+        let now = std::time::SystemTime::now();
+        if let Ok(duration) = now.duration_since(self.overview.last_time_updated) {
+            if duration.as_secs() > 10 {
+                self.overview.finalized_block = self.finalized_block().clone();
+                self.overview.best_block = self.best_block().clone();
+
+                if let Ok(overview) = serde_json::to_string_pretty(&self.overview) {
+                    feed.push(feed_message::ChainOverviewUpdate(overview));
+                }
+                self.overview.last_time_updated = now;
             }
         }
     }
@@ -464,6 +474,7 @@ pub struct ChainOverview {
     best_block: Block,
     finalized_block: Block,
     nodes: Vec<NodeOverview>,
+    last_time_updated: SystemTime,
 }
 
 impl ChainOverview {
@@ -474,6 +485,7 @@ impl ChainOverview {
             best_block: Block::zero(),
             finalized_block: Block::zero(),
             nodes: Default::default(),
+            last_time_updated: SystemTime::now(),
         }
     }
 
@@ -486,6 +498,7 @@ impl ChainOverview {
         interval_start: String,
         interval_end: String,
         interval_duration: u64,
+        raw_node: &Node,
     ) {
         let node = match self.nodes.iter_mut().find(|n| n.id == node_id) {
             Some(n) => n,
@@ -493,10 +506,19 @@ impl ChainOverview {
                 self.nodes.push(NodeOverview {
                     id: node_id,
                     blocks: VecDeque::with_capacity(MAX_BLOCKS_SIZE + 5),
+                    details: raw_node.details().clone(),
+                    stats: raw_node.stats().clone(),
+                    best_block: raw_node.best().clone(),
+                    finalized_block: raw_node.finalized().clone(),
                 });
                 self.nodes.last_mut().unwrap()
             }
         };
+
+        node.details = raw_node.details().clone();
+        node.stats = raw_node.stats().clone();
+        node.best_block = raw_node.best().clone();
+        node.finalized_block = raw_node.finalized().clone();
 
         let block = match node
             .blocks
@@ -530,6 +552,10 @@ impl ChainOverview {
 #[derive(Serialize, Debug, Clone)]
 pub struct NodeOverview {
     pub id: usize,
+    pub details: NodeDetails,
+    pub stats: NodeStats,
+    pub best_block: Block,
+    pub finalized_block: Block,
     pub blocks: VecDeque<NodeBlock>,
 }
 

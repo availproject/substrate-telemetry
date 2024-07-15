@@ -115,7 +115,8 @@ export class Chain extends React.Component<ChainProps, ChainState> {
     }
 
     if (display === 'overview') {
-      return <Overview appState={appState} />;
+      this.props.appUpdate({showChainOverview: true});
+      return;
     }
 
     throw new Error('invalid `display`: ${display}');
