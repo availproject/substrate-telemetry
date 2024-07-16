@@ -43,35 +43,6 @@ pub enum ToAggregator {
     GatherMetrics(flume::Sender<Metrics>),
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
-pub struct NodeOverview {
-    pub timestamp: u64,
-    pub best_block_height: u64,
-    pub best_block_hash: BlockHash,
-    pub name: String,
-    pub version: String,
-    pub peer_count: u64,
-    pub start_up_time: u64,
-}
-
-#[derive(Clone, Debug, serde::Serialize, Default)]
-pub struct BlockMetricOverview {
-    pub block_heigh: u32,
-    pub block_hash: BlockHash,
-    pub proposal_time: Vec<(String, u64, u64, u64)>,
-    pub sync_time: Vec<BlockMetricIntervalOverview>,
-    pub import_time: Vec<BlockMetricIntervalOverview>,
-}
-
-#[derive(Clone, Debug, serde::Serialize, Default)]
-pub struct BlockMetricIntervalOverview {
-    pub node_name: String,
-    pub start_timestamp: u64,
-    pub end_timestamp: u64,
-    pub duration: u64,
-    pub start_timestamp_delay: u64,
-}
-
 /// An incoming shard connection can send these messages to the aggregator.
 #[derive(Clone, Debug)]
 pub enum FromShardWebsocket {
@@ -283,35 +254,6 @@ impl InnerLoop {
             }
         }
     }
-
-    /*     fn handle_inner_messages(&mut self, data: FromInternal, rx: flume::Sender<ToInternal>) {
-        if let FromInternal::GatherNodes { chain } = data {
-            let Some(chain) = self.node_state.get_chain_by_genesis_hash(&chain) else {
-                _ = rx.send(ToInternal::Error);
-                return;
-            };
-
-            let nodes = chain.nodes_slice();
-            let mut overview: Vec<NodeOverview> = Vec::with_capacity(nodes.iter().count());
-            for node in nodes {
-                let Some(node) = node else {
-                    continue;
-                };
-
-                overview.push(NodeOverview {
-                    timestamp: node.best_timestamp(),
-                    best_block_height: node.best().height,
-                    best_block_hash: node.best().hash,
-                    name: node.details().name.clone().into_string(),
-                    version: node.details().version.clone().into_string(),
-                    peer_count: node.stats().peers,
-                    start_up_time: node.startup_time().unwrap_or(0),
-                });
-            }
-
-            _ = rx.send(ToInternal::GatherNodes(overview));
-        }
-    } */
 
     /// Gather and return some metrics.\
     fn handle_gather_metrics(

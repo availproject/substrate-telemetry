@@ -21,6 +21,7 @@ use common::{id_type, time, DenseMap, MostSeen, NumStats};
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::collections::{HashSet, VecDeque};
+use std::hash::Hash;
 use std::str::FromStr;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -299,6 +300,7 @@ impl Chain {
             if duration.as_secs() > 10 {
                 self.overview.finalized_block = self.finalized_block().clone();
                 self.overview.best_block = self.best_block().clone();
+                self.overview.refresh_forks();
 
                 if let Ok(overview) = serde_json::to_string_pretty(&self.overview) {
                     feed.push(feed_message::ChainOverviewUpdate(overview));
@@ -465,7 +467,7 @@ impl Chain {
     }
 }
 
-const MAX_BLOCKS_SIZE: usize = 10;
+const MAX_BLOCKS_SIZE: usize = 15;
 
 #[derive(Serialize, Debug, Clone)]
 pub struct ChainOverview {
@@ -473,8 +475,10 @@ pub struct ChainOverview {
     max_nodes: usize,
     best_block: Block,
     finalized_block: Block,
-    nodes: Vec<NodeOverview>,
     last_time_updated: SystemTime,
+    forks: Vec<(BlockNumber, Vec<BlockHash>)>,
+    nodes: Vec<NodeOverview>,
+    blocks: VecDeque<(BlockNumber, Vec<BlockHashStats>)>,
 }
 
 impl ChainOverview {
@@ -484,9 +488,21 @@ impl ChainOverview {
             max_nodes,
             best_block: Block::zero(),
             finalized_block: Block::zero(),
-            nodes: Default::default(),
             last_time_updated: SystemTime::now(),
+            forks: Default::default(),
+            nodes: Default::default(),
+            blocks: VecDeque::with_capacity(MAX_BLOCKS_SIZE + 5),
         }
+    }
+
+    pub fn refresh_forks(&mut self) {
+        self.forks.clear();
+        self.forks = self
+            .blocks
+            .iter()
+            .filter(|(_, value)| value.len() > 1)
+            .map(|(key, value)| (*key, value.iter().map(|h| h.hash).collect()))
+            .collect();
     }
 
     pub fn new_data(
@@ -505,7 +521,6 @@ impl ChainOverview {
             None => {
                 self.nodes.push(NodeOverview {
                     id: node_id,
-                    blocks: VecDeque::with_capacity(MAX_BLOCKS_SIZE + 5),
                     details: raw_node.details().clone(),
                     stats: raw_node.stats().clone(),
                     best_block: raw_node.best().clone(),
@@ -520,31 +535,51 @@ impl ChainOverview {
         node.best_block = raw_node.best().clone();
         node.finalized_block = raw_node.finalized().clone();
 
-        let block = match node
-            .blocks
-            .iter_mut()
-            .find(|b| b.height == block_height && b.hash == block_hash)
-        {
-            Some(b) => b,
-            None => {
-                node.blocks.push_back(NodeBlock {
-                    hash: block_hash,
-                    height: block_height,
-                    data: Default::default(),
-                });
-                node.blocks.back_mut().unwrap()
-            }
-        };
-
-        block.data.push(NodeBlockStats {
+        let value = BlockStats {
+            node_id,
+            node_name: node.details.name.to_string(),
             kind: interval_kind,
             start: interval_start,
             end: interval_end,
             duration_in_ms: interval_duration,
-        });
+        };
 
-        if node.blocks.len() > MAX_BLOCKS_SIZE {
-            node.blocks.pop_front();
+        let existing_height = self
+            .blocks
+            .iter_mut()
+            .find(|(height, _)| *height == block_height);
+
+        if let Some(height) = existing_height {
+            let existing_hash = height.1.iter_mut().find(|h| h.hash == block_hash);
+            match existing_hash {
+                Some(stats) => stats.data.push(value),
+                None => {
+                    height.1.push(BlockHashStats {
+                        hash: block_hash,
+                        data: vec![value],
+                    });
+                }
+            };
+        } else {
+            let mut should_sort = false;
+            if let Some(front) = self.blocks.front() {
+                should_sort = block_height < front.0;
+            }
+
+            self.blocks.push_front((
+                block_height,
+                vec![BlockHashStats {
+                    hash: block_hash,
+                    data: vec![value],
+                }],
+            ));
+            if should_sort {
+                self.blocks.make_contiguous().sort_by(|a, b| b.0.cmp(&a.0));
+            }
+        }
+
+        if self.blocks.len() > MAX_BLOCKS_SIZE {
+            self.blocks.pop_back();
         }
     }
 }
@@ -556,18 +591,18 @@ pub struct NodeOverview {
     pub stats: NodeStats,
     pub best_block: Block,
     pub finalized_block: Block,
-    pub blocks: VecDeque<NodeBlock>,
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub struct NodeBlock {
+pub struct BlockHashStats {
     hash: BlockHash,
-    height: BlockNumber,
-    data: Vec<NodeBlockStats>,
+    data: Vec<BlockStats>,
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub struct NodeBlockStats {
+pub struct BlockStats {
+    node_id: usize,
+    node_name: String,
     kind: IntervalKind,
     start: String,
     end: String,
