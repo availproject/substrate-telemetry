@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::chain_overview::{BlockNumberToBlockData, BlockNumberToHashes, NodeImplementation};
+use super::chain_overview::{
+    BlockNumberToBlockData, BlockNumberToHashes, NodeDetailsEx, NodeImplementation,
+};
 use super::node::Node;
 use crate::feed_message::{ChainStats, FeedMessageSerializer};
 use crate::find_location;
@@ -294,7 +296,7 @@ impl<'a> StateChain<'a> {
     pub fn node_implementations(&self) -> Vec<NodeImplementation> {
         self.chain.node_implementations()
     }
-    pub fn node_details(&self) -> Vec<NodeDetails> {
+    pub fn node_details(&self) -> Vec<NodeDetailsEx> {
         self.chain.node_details()
     }
 }

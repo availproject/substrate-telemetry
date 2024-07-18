@@ -16,7 +16,7 @@
 
 use common::node_message::Payload;
 use common::node_types::BlockHash;
-use common::node_types::{Block, NodeDetails, Timestamp};
+use common::node_types::{Block, Timestamp};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
@@ -28,7 +28,7 @@ use crate::feed_message::{self, ChainStats, FeedMessageSerializer};
 use crate::find_location;
 
 use super::chain_overview::{
-    BlockNumberToBlockData, BlockNumberToHashes, ChainOverview, NodeImplementation,
+    BlockNumberToBlockData, BlockNumberToHashes, ChainOverview, NodeDetailsEx, NodeImplementation,
     NodeImplementationData,
 };
 use super::chain_stats::ChainStatsCollator;
@@ -493,10 +493,19 @@ impl Chain {
         implementations
     }
 
-    pub fn node_details(&self) -> Vec<NodeDetails> {
+    pub fn node_details(&self) -> Vec<NodeDetailsEx> {
         self.nodes
             .iter()
-            .map(|(_, node)| node.details().clone())
+            .map(|(id, node)| NodeDetailsEx {
+                node_id: id.0,
+                details: node.details().clone(),
+                best_block: node.best().clone(),
+                finalized_block: node.finalized().clone(),
+                best_block_timestamp: node.best_timestamp().clone(),
+                peers: node.stats().peers,
+                txcount: node.stats().peers,
+                stale: node.stale(),
+            })
             .collect()
     }
 }

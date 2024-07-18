@@ -303,7 +303,7 @@ impl InnerLoop {
             let forks = chain_state.forks();
             let blocks = chain_state.blocks();
             let node_implementations = chain_state.node_implementations();
-            let node_details = chain_state.node_details();
+            let nodes = chain_state.node_details();
 
             let overview = ChainOverviewEx {
                 genesis_hash,
@@ -315,7 +315,7 @@ impl InnerLoop {
                 forks,
                 node_implementations,
                 blocks,
-                node_details,
+                nodes,
             };
             overviews.insert(genesis_hash, overview);
         }

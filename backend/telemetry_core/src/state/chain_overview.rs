@@ -16,8 +16,7 @@ pub struct ChainOverviewEx {
     pub forks: Vec<BlockNumberToHashes>,
     pub node_implementations: Vec<NodeImplementation>,
     pub blocks: Vec<BlockNumberToBlockData>,
-    pub node_details: Vec<NodeDetails>,
-    //pub nodes: Vec<NodeOverview>,
+    pub nodes: Vec<NodeDetailsEx>,
 }
 
 const MAX_BLOCKS_SIZE: usize = 15;
@@ -204,4 +203,16 @@ pub struct BlockProducer {
     pub node_id: usize,
     pub node_name: Box<str>,
     pub node_network_id: Box<str>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct NodeDetailsEx {
+    pub node_id: usize,
+    pub details: NodeDetails,
+    pub best_block: Block,
+    pub finalized_block: Block,
+    pub best_block_timestamp: u64,
+    pub peers: u64,
+    pub txcount: u64,
+    pub stale: bool,
 }
