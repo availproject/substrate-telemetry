@@ -16,6 +16,7 @@
 
 use super::aggregator::ConnId;
 use crate::feed_message::{self, FeedMessageSerializer};
+use crate::state::chain_overview::ChainOverviewEx;
 use crate::state::{self, NodeId, State};
 use crate::{find_location, AggregatorOpts};
 use bimap::BiMap;
@@ -41,6 +42,7 @@ pub enum ToAggregator {
     /// Hand back some metrics. The provided sender is expected not to block when
     /// a message is sent into it.
     GatherMetrics(flume::Sender<Metrics>),
+    GatherOverview(flume::Sender<HashMap<BlockHash, ChainOverviewEx>>),
 }
 
 /// An incoming shard connection can send these messages to the aggregator.
@@ -226,6 +228,7 @@ impl InnerLoop {
                         dropped_messages2.load(Ordering::Relaxed),
                         total_messages2.load(Ordering::Relaxed),
                     ),
+                    ToAggregator::GatherOverview(tx) => self.handle_gather_overview(tx),
                 }
             }
         });
@@ -284,6 +287,41 @@ impl InnerLoop {
             connected_feeds,
             connected_shards,
         });
+    }
+
+    /// Gather and return some metrics.\
+    fn handle_gather_overview(&mut self, rx: flume::Sender<HashMap<BlockHash, ChainOverviewEx>>) {
+        let mut overviews: HashMap<BlockHash, ChainOverviewEx> = HashMap::new();
+
+        for chain_state in self.node_state.iter_chains() {
+            let genesis_hash = chain_state.genesis_hash();
+            let best_block = chain_state.best_block().clone();
+            let finalized_block = chain_state.finalized_block().clone();
+            let max_nodes = chain_state.max_nodes();
+            let average_block_time = chain_state.average_block_time();
+            let node_count = chain_state.node_count();
+            let forks = chain_state.forks();
+            let blocks = chain_state.blocks();
+            let node_implementations = chain_state.node_implementations();
+            let node_details = chain_state.node_details();
+
+            let overview = ChainOverviewEx {
+                genesis_hash,
+                max_nodes,
+                node_count,
+                best_block,
+                finalized_block,
+                average_block_time,
+                forks,
+                node_implementations,
+                blocks,
+                node_details,
+            };
+            overviews.insert(genesis_hash, overview);
+        }
+
+        // Ignore error sending; assume the receiver stopped caring and dropped the channel:
+        let _ = rx.send(overviews);
     }
 
     /// Handle messages that come from the node geographical locator.

@@ -16,9 +16,12 @@
 
 use super::inner_loop::{self};
 use crate::find_location::find_location;
+use crate::state::chain_overview::ChainOverviewEx;
 use crate::state::NodeId;
 use common::id_type;
 use futures::{future, Sink, SinkExt};
+use primitive_types::H256;
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -112,6 +115,17 @@ impl Aggregator {
 
         let metrics = rx.recv_async().await?;
         Ok(metrics)
+    }
+
+    /// Gather metrics from our aggregator loop
+    pub async fn gather_overview(&self) -> anyhow::Result<HashMap<H256, ChainOverviewEx>> {
+        let (tx, rx) = flume::unbounded();
+        let msg = inner_loop::ToAggregator::GatherOverview(tx);
+
+        self.0.tx_to_aggregator.send_async(msg).await?;
+
+        let overview = rx.recv_async().await?;
+        Ok(overview)
     }
 
     /// Return a sink that a shard can send messages into to be handled by the aggregator.

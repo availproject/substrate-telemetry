@@ -366,10 +366,6 @@ export class Connection {
           break;
         }
 
-        case ACTIONS.ChainOverviewUpdate: {
-          this.appUpdate({ chainOverview: message.payload });
-        }
-
         default: {
           break;
         }

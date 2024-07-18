@@ -18,6 +18,8 @@ mod aggregator;
 mod feed_message;
 mod find_location;
 mod state;
+use hyper::Body;
+use primitive_types::H256;
 use std::str::FromStr;
 use tokio::time::{Duration, Instant};
 
@@ -153,6 +155,14 @@ async fn start_server(num_aggregators: usize, opts: Opts) -> anyhow::Result<()> 
                     .unwrap())
             };
 
+            let error_response = move |message: &str| {
+                let message = std::format!("\"error\": \"{}\"", message);
+                Ok(Response::builder()
+                    .status(404)
+                    .body(Body::from(message))
+                    .unwrap())
+            };
+
             match (req.method(), req.uri().path().trim_end_matches('/')) {
                 // Check that the server is up and running:
                 (&Method::GET, "/health") => Ok(Response::new("OK".into())),
@@ -204,6 +214,33 @@ async fn start_server(num_aggregators: usize, opts: Opts) -> anyhow::Result<()> 
                 }
                 // Return metrics in a prometheus-friendly text based format:
                 (&Method::GET, "/metrics") => Ok(return_prometheus_metrics(aggregator).await),
+                (&Method::GET, uri) => {
+                    let uri_split = uri.split('/');
+                    if uri.starts_with("/overview/") {
+                        let Some(genesis_hash) = uri_split.last() else {
+                            return error_response("Failed split string");
+                        };
+
+                        let Ok(genesis_hash) = genesis_hash.parse::<H256>() else {
+                            return error_response("Cannot convert given block hash to H256");
+                        };
+                        let overview = match aggregator.overview(genesis_hash) {
+                            Ok(o) => o,
+                            Err(err) => return error_response(err),
+                        };
+
+                        let Ok(overview) = serde_json::to_string_pretty(&overview) else {
+                            return error_response("Failed to do json");
+                        };
+
+                        Ok(Response::builder().body(overview.into()).unwrap())
+                    } else {
+                        Ok(Response::builder()
+                            .status(404)
+                            .body("Not found 2".into())
+                            .unwrap())
+                    }
+                }
                 // 404 for anything else:
                 _ => default_response(),
             }

@@ -1,8 +1,12 @@
+use crate::state::chain_overview::ChainOverviewEx;
+
 use super::aggregator::{Aggregator, AggregatorOpts};
 use super::inner_loop::{self};
 use common::EitherSink;
 use futures::{Sink, SinkExt};
 use inner_loop::{FromShardWebsocket, Metrics};
+use primitive_types::H256;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -13,6 +17,7 @@ pub struct AggregatorSetInner {
     aggregators: Vec<Aggregator>,
     next_idx: AtomicUsize,
     metrics: Mutex<Vec<Metrics>>,
+    overview: Mutex<Vec<HashMap<H256, ChainOverviewEx>>>,
 }
 
 impl AggregatorSet {
@@ -29,17 +34,54 @@ impl AggregatorSet {
         .await?;
 
         let initial_metrics = (0..num_aggregators).map(|_| Metrics::default()).collect();
+        let initial_overview = (0..num_aggregators).map(|_| Default::default()).collect();
 
         let this = AggregatorSet(Arc::new(AggregatorSetInner {
             aggregators,
             next_idx: AtomicUsize::new(0),
             metrics: Mutex::new(initial_metrics),
+            overview: Mutex::new(initial_overview),
         }));
 
         // Start asking for metrics:
         this.spawn_metrics_loops();
 
+        // Start asking for overview:
+        this.spawn_overview_loops();
+
         Ok(this)
+    }
+
+    fn spawn_overview_loops(&self) {
+        let aggregators = self.0.aggregators.clone();
+        for (idx, a) in aggregators.into_iter().enumerate() {
+            let inner = Arc::clone(&self.0);
+            tokio::spawn(async move {
+                loop {
+                    let now = tokio::time::Instant::now();
+                    let overview = match a.gather_overview().await {
+                        Ok(overview) => overview,
+                        // Any error here is unlikely and probably means that the aggregator
+                        // loop has failed completely.
+                        Err(e) => {
+                            log::error!("Error obtaining metrics (bailing): {}", e);
+                            return;
+                        }
+                    };
+
+                    // Lock, update the stored metrics and drop the lock immediately.
+                    // We discard any error; if something went wrong talking to the inner loop,
+                    // it's probably a fatal error
+                    {
+                        inner.overview.lock().unwrap()[idx] = overview;
+                    }
+
+                    // Sleep *at least* 10 seconds. If it takes a while to get overview back, we'll
+                    // end up waiting longer between requests.
+                    tokio::time::sleep_until(now + tokio::time::Duration::from_secs(10)).await;
+                }
+            });
+        }
     }
 
     /// Spawn loops which periodically ask for metrics from each internal aggregator.
@@ -57,7 +99,7 @@ impl AggregatorSet {
                         // Any error here is unlikely and probably means that the aggregator
                         // loop has failed completely.
                         Err(e) => {
-                            log::error!("Error obtaining metrics (bailing): {}", e);
+                            log::error!("Error obtaining overview (bailing): {}", e);
                             return;
                         }
                     };
@@ -80,6 +122,23 @@ impl AggregatorSet {
     /// Return the latest metrics we've gathered so far from each internal aggregator.
     pub fn latest_metrics(&self) -> Vec<Metrics> {
         self.0.metrics.lock().unwrap().clone()
+    }
+
+    /// Return the latest overview we've gathered so far from each internal aggregator.
+    pub fn overview(&self, genesis_hash: H256) -> Result<ChainOverviewEx, &str> {
+        let Ok(lock) = self.0.overview.lock() else {
+            return Err("Failed to acquire lock.");
+        };
+
+        let Some(overviews) = lock.get(0) else {
+            return Err("Failed to get any Data");
+        };
+
+        let Some(overview) = overviews.get(&genesis_hash) else {
+            return Err("No genesis hash found");
+        };
+
+        Ok(overview.clone())
     }
 
     /// Return a sink that a shard can send messages into to be handled by all aggregators.

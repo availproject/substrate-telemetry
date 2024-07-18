@@ -21,7 +21,6 @@ export * from './List';
 export * from './Map';
 export * from './Settings';
 export * from './Stats';
-export * from './Overview';
 export * from './Icon';
 export * from './Tile';
 export * from './Ago';

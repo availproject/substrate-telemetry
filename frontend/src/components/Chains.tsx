@@ -18,8 +18,8 @@ import * as React from 'react';
 import { Connection } from '../Connection';
 import { Icon } from './Icon';
 import { Types, Maybe } from '../common';
-import { ChainData, Update } from '../state';
-import { setHashData, viewport } from '../utils';
+import { ChainData } from '../state';
+import { viewport } from '../utils';
 
 import githubIcon from '../icons/mark-github.svg';
 import listIcon from '../icons/kebab-horizontal.svg';
@@ -30,7 +30,6 @@ interface ChainsProps {
   subscribedHash: Maybe<Types.GenesisHash>;
   subscribedData: Maybe<ChainData>;
   connection: Promise<Connection>;
-  appUpdate: Update;
 }
 
 // Average tab width in pixels
@@ -59,7 +58,7 @@ export class Chains extends React.Component<ChainsProps> {
     this.subscribedChainInView = false;
 
     const viewportWidth = viewport().width;
-    const { chains, subscribedHash, subscribedData, appUpdate } = this.props;
+    const { chains, subscribedHash, subscribedData } = this.props;
 
     const renderedChains = chains
       .slice(0, (viewportWidth / AVERAGE_TAB_WIDTH) | 0)

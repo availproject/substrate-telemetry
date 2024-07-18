@@ -14,20 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use common::node_message::{IntervalKind, Payload};
-use common::node_types::{Block, NodeDetails, NodeStats, Timestamp};
-use common::node_types::{BlockHash, BlockNumber};
+use common::node_message::Payload;
+use common::node_types::BlockHash;
+use common::node_types::{Block, NodeDetails, Timestamp};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
 use once_cell::sync::Lazy;
-use serde::Serialize;
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::hash::Hash;
 use std::str::FromStr;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use crate::feed_message::{self, ChainStats, FeedMessageSerializer};
 use crate::find_location;
 
+use super::chain_overview::{
+    BlockNumberToBlockData, BlockNumberToHashes, ChainOverview, NodeImplementation,
+    NodeImplementationData,
+};
 use super::chain_stats::ChainStatsCollator;
 use super::counter::CounterValue;
 use super::node::Node;
@@ -122,7 +125,7 @@ impl Chain {
             stats_collator: Default::default(),
             stats: Default::default(),
             stats_last_regenerated: Instant::now(),
-            overview: ChainOverview::new(genesis_hash, max_nodes),
+            overview: ChainOverview::new(),
         }
     }
 
@@ -262,13 +265,14 @@ impl Chain {
 
                             self.overview.new_data(
                                 nid.0,
+                                node.details().name.clone(),
+                                node.details().network_id.to_string().into_boxed_str(),
                                 block_hash,
                                 block_height as u64,
                                 kind,
                                 start.to_string(),
                                 end.to_string(),
                                 duration,
-                                node,
                             );
                         }
                     }
@@ -292,20 +296,6 @@ impl Chain {
                         ));
                     }
                 }
-            }
-        }
-
-        let now = std::time::SystemTime::now();
-        if let Ok(duration) = now.duration_since(self.overview.last_time_updated) {
-            if duration.as_secs() > 10 {
-                self.overview.finalized_block = self.finalized_block().clone();
-                self.overview.best_block = self.best_block().clone();
-                self.overview.refresh_forks();
-
-                if let Ok(overview) = serde_json::to_string_pretty(&self.overview) {
-                    feed.push(feed_message::ChainOverviewUpdate(overview));
-                }
-                self.overview.last_time_updated = now;
             }
         }
     }
@@ -465,146 +455,48 @@ impl Chain {
     pub fn stats(&self) -> &ChainStats {
         &self.stats
     }
-}
-
-const MAX_BLOCKS_SIZE: usize = 15;
-
-#[derive(Serialize, Debug, Clone)]
-pub struct ChainOverview {
-    genesis_hash: BlockHash,
-    max_nodes: usize,
-    best_block: Block,
-    finalized_block: Block,
-    last_time_updated: SystemTime,
-    forks: Vec<(BlockNumber, Vec<BlockHash>)>,
-    nodes: Vec<NodeOverview>,
-    blocks: VecDeque<(BlockNumber, Vec<BlockHashStats>)>,
-}
-
-impl ChainOverview {
-    pub fn new(genesis_hash: BlockHash, max_nodes: usize) -> Self {
-        Self {
-            genesis_hash,
-            max_nodes,
-            best_block: Block::zero(),
-            finalized_block: Block::zero(),
-            last_time_updated: SystemTime::now(),
-            forks: Default::default(),
-            nodes: Default::default(),
-            blocks: VecDeque::with_capacity(MAX_BLOCKS_SIZE + 5),
-        }
+    pub fn max_nodes(&self) -> usize {
+        self.max_nodes
     }
-
-    pub fn refresh_forks(&mut self) {
-        self.forks.clear();
-        self.forks = self
-            .blocks
-            .iter()
-            .filter(|(_, value)| value.len() > 1)
-            .map(|(key, value)| (*key, value.iter().map(|h| h.hash).collect()))
-            .collect();
+    pub fn forks(&self) -> Vec<BlockNumberToHashes> {
+        self.overview.get_forks()
     }
+    pub fn blocks(&self) -> Vec<BlockNumberToBlockData> {
+        self.overview.get_blocks()
+    }
+    pub fn node_implementations(&self) -> Vec<NodeImplementation> {
+        let mut implementations: Vec<NodeImplementation> = Vec::new();
 
-    pub fn new_data(
-        &mut self,
-        node_id: usize,
-        block_hash: BlockHash,
-        block_height: BlockNumber,
-        interval_kind: IntervalKind,
-        interval_start: String,
-        interval_end: String,
-        interval_duration: u64,
-        raw_node: &Node,
-    ) {
-        let node = match self.nodes.iter_mut().find(|n| n.id == node_id) {
-            Some(n) => n,
-            None => {
-                self.nodes.push(NodeOverview {
-                    id: node_id,
-                    details: raw_node.details().clone(),
-                    stats: raw_node.stats().clone(),
-                    best_block: raw_node.best().clone(),
-                    finalized_block: raw_node.finalized().clone(),
-                });
-                self.nodes.last_mut().unwrap()
-            }
-        };
+        for (id, node) in self.nodes.iter() {
+            let version = node.details().version.clone();
 
-        node.details = raw_node.details().clone();
-        node.stats = raw_node.stats().clone();
-        node.best_block = raw_node.best().clone();
-        node.finalized_block = raw_node.finalized().clone();
-
-        let value = BlockStats {
-            node_id,
-            node_name: node.details.name.to_string(),
-            kind: interval_kind,
-            start: interval_start,
-            end: interval_end,
-            duration_in_ms: interval_duration,
-        };
-
-        let existing_height = self
-            .blocks
-            .iter_mut()
-            .find(|(height, _)| *height == block_height);
-
-        if let Some(height) = existing_height {
-            let existing_hash = height.1.iter_mut().find(|h| h.hash == block_hash);
-            match existing_hash {
-                Some(stats) => stats.data.push(value),
+            let implementation = match implementations.iter_mut().find(|i| i.version.eq(&version)) {
+                Some(i) => i,
                 None => {
-                    height.1.push(BlockHashStats {
-                        hash: block_hash,
-                        data: vec![value],
+                    implementations.push(NodeImplementation {
+                        version,
+                        count: 0,
+                        nodes: Default::default(),
                     });
+                    implementations.last_mut().unwrap()
                 }
             };
-        } else {
-            let mut should_sort = false;
-            if let Some(front) = self.blocks.front() {
-                should_sort = block_height < front.0;
-            }
 
-            self.blocks.push_front((
-                block_height,
-                vec![BlockHashStats {
-                    hash: block_hash,
-                    data: vec![value],
-                }],
-            ));
-            if should_sort {
-                self.blocks.make_contiguous().sort_by(|a, b| b.0.cmp(&a.0));
-            }
+            implementation.nodes.push(NodeImplementationData {
+                id: id.0,
+                node_name: node.details().name.clone(),
+                network_id: node.details().network_id.to_string().into_boxed_str(),
+            });
+            implementation.count += 1;
         }
 
-        if self.blocks.len() > MAX_BLOCKS_SIZE {
-            self.blocks.pop_back();
-        }
+        implementations
     }
-}
 
-#[derive(Serialize, Debug, Clone)]
-pub struct NodeOverview {
-    pub id: usize,
-    pub details: NodeDetails,
-    pub stats: NodeStats,
-    pub best_block: Block,
-    pub finalized_block: Block,
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub struct BlockHashStats {
-    hash: BlockHash,
-    data: Vec<BlockStats>,
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub struct BlockStats {
-    node_id: usize,
-    node_name: String,
-    kind: IntervalKind,
-    start: String,
-    end: String,
-    duration_in_ms: u64,
+    pub fn node_details(&self) -> Vec<NodeDetails> {
+        self.nodes
+            .iter()
+            .map(|(_, node)| node.details().clone())
+            .collect()
+    }
 }
