@@ -15,9 +15,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 mod aggregator;
+mod endpoints;
 mod feed_message;
 mod find_location;
 mod state;
+
 use hyper::Body;
 use primitive_types::H256;
 use std::str::FromStr;
@@ -224,7 +226,43 @@ async fn start_server(num_aggregators: usize, opts: Opts) -> anyhow::Result<()> 
                         let Ok(genesis_hash) = genesis_hash.parse::<H256>() else {
                             return error_response("Cannot convert given block hash to H256");
                         };
-                        let overview = match aggregator.overview(genesis_hash) {
+                        let overview = match aggregator.overview_endpoint(genesis_hash) {
+                            Ok(o) => o,
+                            Err(err) => return error_response(err),
+                        };
+
+                        let Ok(overview) = serde_json::to_string_pretty(&overview) else {
+                            return error_response("Failed to do json");
+                        };
+
+                        Ok(Response::builder().body(overview.into()).unwrap())
+                    } else if uri.starts_with("/block_history/") {
+                        let Some(genesis_hash) = uri_split.last() else {
+                            return error_response("Failed split string");
+                        };
+
+                        let Ok(genesis_hash) = genesis_hash.parse::<H256>() else {
+                            return error_response("Cannot convert given block hash to H256");
+                        };
+                        let overview = match aggregator.block_history_endpoint(genesis_hash) {
+                            Ok(o) => o,
+                            Err(err) => return error_response(err),
+                        };
+
+                        let Ok(overview) = serde_json::to_string_pretty(&overview) else {
+                            return error_response("Failed to do json");
+                        };
+
+                        Ok(Response::builder().body(overview.into()).unwrap())
+                    } else if uri.starts_with("/node_list/") {
+                        let Some(genesis_hash) = uri_split.last() else {
+                            return error_response("Failed split string");
+                        };
+
+                        let Ok(genesis_hash) = genesis_hash.parse::<H256>() else {
+                            return error_response("Cannot convert given block hash to H256");
+                        };
+                        let overview = match aggregator.node_list_endpoint(genesis_hash) {
                             Ok(o) => o,
                             Err(err) => return error_response(err),
                         };

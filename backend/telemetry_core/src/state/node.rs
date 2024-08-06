@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
+
 use crate::find_location;
 use common::node_message::SystemInterval;
 use common::node_types::{
@@ -50,6 +52,10 @@ pub struct Node {
     startup_time: Option<Timestamp>,
     /// Hardware benchmark results for the node
     hwbench: Option<NodeHwBench>,
+    /// Unique ID
+    identity: UniqueNodeIdentity,
+    /// is authority
+    is_authority: Option<bool>,
 }
 
 impl Node {
@@ -58,6 +64,11 @@ impl Node {
             .startup_time
             .take()
             .and_then(|time| time.parse().ok());
+
+        let identity = UniqueNodeIdentity {
+            node_name: details.name.clone().into(),
+            network_id: details.network_id.to_string().into(),
+        };
 
         Node {
             details,
@@ -71,7 +82,13 @@ impl Node {
             stale: false,
             startup_time,
             hwbench: None,
+            identity,
+            is_authority: None,
         }
+    }
+
+    pub fn identity(&self) -> UniqueNodeIdentity {
+        self.identity.clone()
     }
 
     pub fn details(&self) -> &NodeDetails {
@@ -237,4 +254,18 @@ impl Node {
     pub fn startup_time(&self) -> Option<Timestamp> {
         self.startup_time
     }
+
+    pub fn set_is_authority(&mut self, value: Option<bool>) {
+        self.is_authority = value;
+    }
+
+    pub fn is_authority(&self) -> Option<bool> {
+        self.is_authority
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UniqueNodeIdentity {
+    pub node_name: Arc<str>,
+    pub network_id: Arc<str>,
 }

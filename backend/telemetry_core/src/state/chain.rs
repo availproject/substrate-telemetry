@@ -27,13 +27,11 @@ use std::time::{Duration, Instant};
 use crate::feed_message::{self, ChainStats, FeedMessageSerializer};
 use crate::find_location;
 
-use super::chain_overview::{
-    BlockNumberToBlockData, BlockNumberToHashes, ChainOverview, NodeDetailsEx, NodeImplementation,
-    NodeImplementationData,
-};
+use super::blocks::StoredBlocks;
 use super::chain_stats::ChainStatsCollator;
 use super::counter::CounterValue;
 use super::node::Node;
+use crate::endpoints::{BlockHistory, ChainOverview, NodeList};
 
 id_type! {
     /// A Node ID that is unique to the chain it's in.
@@ -72,7 +70,7 @@ pub struct Chain {
     /// Timestamp of when the stats were last regenerated.
     stats_last_regenerated: Instant,
     /// chain block history
-    overview: ChainOverview,
+    stored_blocks: StoredBlocks,
 }
 
 pub enum AddNodeResult {
@@ -87,14 +85,11 @@ pub struct RemoveNodeResult {
     pub chain_renamed: bool,
 }
 
-/// Genesis hashes of chains we consider "first party". These chains allow any
-/// number of nodes to connect.
+/// Genesis hashes of chains we consider "first party". These chains allow up to 5k nodes to connect.
 static FIRST_PARTY_NETWORKS: Lazy<HashSet<BlockHash>> = Lazy::new(|| {
     let genesis_hash_strs = &[
-        "0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3", // Polkadot
-        "0xb0a8d493285c2df73290dfb7e61f870f17b41801197a149ca93654499ea3dafe", // Kusama
-        "0xe143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e", // Westend
-        "0xf6e9983c37baf68846fedafe21e56718790e39fb1c582abc408b81bc7b208f9a", // Rococo
+        "0xb91746b45e0346cc2f815a520b9c6cb4d5c0902af848db0a80f85932d2e8276a", // Mainnet
+        "0xd3d2f3a3495dc597434a99d7d449ebad6616db45e4e4f178f31cc6fa14378b70", // Turing
     ];
 
     genesis_hash_strs
@@ -125,7 +120,7 @@ impl Chain {
             stats_collator: Default::default(),
             stats: Default::default(),
             stats_last_regenerated: Instant::now(),
-            overview: ChainOverview::new(),
+            stored_blocks: StoredBlocks::default(),
         }
     }
 
@@ -242,39 +237,26 @@ impl Chain {
                 Payload::BlockMetric(ref prop) => {
                     for block_interval in &prop.block_intervals {
                         let block_height = block_interval.block_number as u32;
-
                         let Ok(block_hash) = block_interval.block_hash.parse::<BlockHash>() else {
                             continue;
                         };
 
-                        for interval in &block_interval.intervals {
-                            use chrono::DateTime;
-                            let start =
-                                DateTime::from_timestamp_millis(interval.start_timestamp as i64)
-                                    .unwrap_or_default();
+                        let (proposal, import, sync) = (
+                            block_interval.proposal.clone(),
+                            block_interval.import.clone(),
+                            block_interval.sync.clone(),
+                        );
 
-                            let end =
-                                DateTime::from_timestamp_millis(interval.end_timestamp as i64)
-                                    .unwrap_or_default();
+                        let identity = node.identity();
+                        let block = Block {
+                            hash: block_hash,
+                            height: block_height as u64,
+                        };
 
-                            let duration = interval
-                                .end_timestamp
-                                .saturating_sub(interval.start_timestamp);
+                        self.stored_blocks
+                            .new_entry(identity, block, proposal, import, sync);
 
-                            let kind = interval.kind;
-
-                            self.overview.new_data(
-                                nid.0,
-                                node.details().name.clone(),
-                                node.details().network_id.to_string().into_boxed_str(),
-                                block_hash,
-                                block_height as u64,
-                                kind,
-                                start.to_string(),
-                                end.to_string(),
-                                duration,
-                            );
-                        }
+                        node.set_is_authority(Some(prop.is_authority));
                     }
                 }
                 _ => {}
@@ -458,54 +440,33 @@ impl Chain {
     pub fn max_nodes(&self) -> usize {
         self.max_nodes
     }
-    pub fn forks(&self) -> Vec<BlockNumberToHashes> {
-        self.overview.get_forks()
-    }
-    pub fn blocks(&self) -> Vec<BlockNumberToBlockData> {
-        self.overview.get_blocks()
-    }
-    pub fn node_implementations(&self) -> Vec<NodeImplementation> {
-        let mut implementations: Vec<NodeImplementation> = Vec::new();
+    pub fn overview_endpoint(&self) -> ChainOverview {
+        let genesis_hash = self.genesis_hash();
+        let best_block = self.best_block().clone();
+        let finalized_block = self.finalized_block().clone();
+        let max_nodes = self.max_nodes();
+        let average_block_time = self.average_block_time();
+        let node_count = self.node_count();
+        let forks = (&self.stored_blocks).into();
+        let blocks = (&self.stored_blocks).into();
+        let implementations = self.into();
 
-        for (id, node) in self.nodes.iter() {
-            let version = node.details().version.clone();
-
-            let implementation = match implementations.iter_mut().find(|i| i.version.eq(&version)) {
-                Some(i) => i,
-                None => {
-                    implementations.push(NodeImplementation {
-                        version,
-                        count: 0,
-                        nodes: Default::default(),
-                    });
-                    implementations.last_mut().unwrap()
-                }
-            };
-
-            implementation.nodes.push(NodeImplementationData {
-                id: id.0,
-                node_name: node.details().name.clone(),
-                network_id: node.details().network_id.to_string().into_boxed_str(),
-            });
-            implementation.count += 1;
+        ChainOverview {
+            genesis_hash,
+            max_nodes,
+            node_count,
+            best_block,
+            finalized_block,
+            average_block_time,
+            forks,
+            implementations,
+            blocks,
         }
-
-        implementations
     }
-
-    pub fn node_details(&self) -> Vec<NodeDetailsEx> {
-        self.nodes
-            .iter()
-            .map(|(id, node)| NodeDetailsEx {
-                node_id: id.0,
-                details: node.details().clone(),
-                best_block: node.best().clone(),
-                finalized_block: node.finalized().clone(),
-                best_block_timestamp: node.best_timestamp().clone(),
-                peers: node.stats().peers,
-                txcount: node.stats().peers,
-                stale: node.stale(),
-            })
-            .collect()
+    pub fn block_history_endpoint(&self) -> BlockHistory {
+        (&self.stored_blocks).into()
+    }
+    pub fn node_list_endpoint(&self) -> NodeList {
+        self.into()
     }
 }

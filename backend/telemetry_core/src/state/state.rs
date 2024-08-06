@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::chain_overview::{
-    BlockNumberToBlockData, BlockNumberToHashes, NodeDetailsEx, NodeImplementation,
-};
 use super::node::Node;
+use crate::endpoints::{BlockHistory, ChainOverview, NodeList};
 use crate::feed_message::{ChainStats, FeedMessageSerializer};
 use crate::find_location;
 use common::node_message::Payload;
@@ -260,9 +258,6 @@ impl<'a> StateChain<'a> {
     pub fn label(&self) -> &'a str {
         self.chain.label()
     }
-    pub fn max_nodes(&self) -> usize {
-        self.chain.max_nodes()
-    }
     pub fn genesis_hash(&self) -> BlockHash {
         self.chain.genesis_hash()
     }
@@ -287,17 +282,14 @@ impl<'a> StateChain<'a> {
     pub fn stats(&self) -> &ChainStats {
         self.chain.stats()
     }
-    pub fn forks(&self) -> Vec<BlockNumberToHashes> {
-        self.chain.forks()
+    pub fn overview_endpoint(&self) -> ChainOverview {
+        self.chain.overview_endpoint()
     }
-    pub fn blocks(&self) -> Vec<BlockNumberToBlockData> {
-        self.chain.blocks()
+    pub fn block_history_endpoint(&self) -> BlockHistory {
+        self.chain.block_history_endpoint()
     }
-    pub fn node_implementations(&self) -> Vec<NodeImplementation> {
-        self.chain.node_implementations()
-    }
-    pub fn node_details(&self) -> Vec<NodeDetailsEx> {
-        self.chain.node_details()
+    pub fn node_list_endpoint(&self) -> NodeList {
+        self.chain.node_list_endpoint()
     }
 }
 

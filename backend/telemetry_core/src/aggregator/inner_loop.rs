@@ -15,8 +15,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::aggregator::ConnId;
+use crate::endpoints::{BlockHistory, ChainOverview, NodeList};
 use crate::feed_message::{self, FeedMessageSerializer};
-use crate::state::chain_overview::ChainOverviewEx;
 use crate::state::{self, NodeId, State};
 use crate::{find_location, AggregatorOpts};
 use bimap::BiMap;
@@ -42,7 +42,9 @@ pub enum ToAggregator {
     /// Hand back some metrics. The provided sender is expected not to block when
     /// a message is sent into it.
     GatherMetrics(flume::Sender<Metrics>),
-    GatherOverview(flume::Sender<HashMap<BlockHash, ChainOverviewEx>>),
+    GatherOverview(flume::Sender<HashMap<BlockHash, ChainOverview>>),
+    GatherBlocks(flume::Sender<HashMap<BlockHash, BlockHistory>>),
+    GatherNodeList(flume::Sender<HashMap<BlockHash, NodeList>>),
 }
 
 /// An incoming shard connection can send these messages to the aggregator.
@@ -228,7 +230,9 @@ impl InnerLoop {
                         dropped_messages2.load(Ordering::Relaxed),
                         total_messages2.load(Ordering::Relaxed),
                     ),
-                    ToAggregator::GatherOverview(tx) => self.handle_gather_overview(tx),
+                    ToAggregator::GatherOverview(tx) => self.handle_gather_overview_endpoint(tx),
+                    ToAggregator::GatherBlocks(tx) => self.handle_gather_block_history_endpoint(tx),
+                    ToAggregator::GatherNodeList(tx) => self.handle_gather_node_list_endpoint(tx),
                 }
             }
         });
@@ -290,39 +294,72 @@ impl InnerLoop {
     }
 
     /// Gather and return some metrics.\
-    fn handle_gather_overview(&mut self, rx: flume::Sender<HashMap<BlockHash, ChainOverviewEx>>) {
-        let mut overviews: HashMap<BlockHash, ChainOverviewEx> = HashMap::new();
+    fn handle_gather_overview_endpoint(
+        &mut self,
+        rx: flume::Sender<HashMap<BlockHash, ChainOverview>>,
+    ) {
+        let mut datas: HashMap<BlockHash, ChainOverview> = HashMap::new();
 
         for chain_state in self.node_state.iter_chains() {
+            let data = chain_state.overview_endpoint();
             let genesis_hash = chain_state.genesis_hash();
-            let best_block = chain_state.best_block().clone();
-            let finalized_block = chain_state.finalized_block().clone();
-            let max_nodes = chain_state.max_nodes();
-            let average_block_time = chain_state.average_block_time();
-            let node_count = chain_state.node_count();
-            let forks = chain_state.forks();
-            let blocks = chain_state.blocks();
-            let node_implementations = chain_state.node_implementations();
-            let nodes = chain_state.node_details();
-
-            let overview = ChainOverviewEx {
-                genesis_hash,
-                max_nodes,
-                node_count,
-                best_block,
-                finalized_block,
-                average_block_time,
-                forks,
-                node_implementations,
-                blocks,
-                nodes,
-            };
-            overviews.insert(genesis_hash, overview);
+            datas.insert(genesis_hash, data);
         }
 
         // Ignore error sending; assume the receiver stopped caring and dropped the channel:
-        let _ = rx.send(overviews);
+        let _ = rx.send(datas);
     }
+
+    fn handle_gather_block_history_endpoint(
+        &mut self,
+        rx: flume::Sender<HashMap<BlockHash, BlockHistory>>,
+    ) {
+        let mut datas: HashMap<BlockHash, BlockHistory> = HashMap::new();
+
+        for chain_state in self.node_state.iter_chains() {
+            let data = chain_state.block_history_endpoint();
+            let genesis_hash = chain_state.genesis_hash();
+            datas.insert(genesis_hash, data);
+        }
+
+        // Ignore error sending; assume the receiver stopped caring and dropped the channel:
+        let _ = rx.send(datas);
+    }
+
+    fn handle_gather_node_list_endpoint(
+        &mut self,
+        rx: flume::Sender<HashMap<BlockHash, NodeList>>,
+    ) {
+        let mut datas: HashMap<BlockHash, NodeList> = HashMap::new();
+
+        for chain_state in self.node_state.iter_chains() {
+            let data = chain_state.node_list_endpoint();
+            let genesis_hash = chain_state.genesis_hash();
+            datas.insert(genesis_hash, data);
+        }
+
+        // Ignore error sending; assume the receiver stopped caring and dropped the channel:
+        let _ = rx.send(datas);
+    }
+
+    /*     /// Gather and return some metrics.\
+    fn handle_gather_blocks(
+        &mut self,
+        rx: flume::Sender<HashMap<BlockHash, SerializedStoredOverviewData>>,
+    ) {
+        /*         let mut serialized_blocks: HashMap<BlockHash, SerializedStoredOverviewData> =
+            HashMap::new();
+
+        for chain_state in self.node_state.iter_chains() {
+            let value = chain_state.serialized_blocks();
+            let genesis_hash = chain_state.genesis_hash();
+            serialized_blocks.insert(genesis_hash, value);
+        }
+
+        // Ignore error sending; assume the receiver stopped caring and dropped the channel:
+        let _ = rx.send(serialized_blocks); */
+        todo!()
+    } */
 
     /// Handle messages that come from the node geographical locator.
     fn handle_from_find_location(&mut self, node_id: NodeId, location: find_location::Location) {
