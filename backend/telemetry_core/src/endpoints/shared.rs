@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use serde::Serialize;
 
 use crate::state::UniqueNodeIdentity;

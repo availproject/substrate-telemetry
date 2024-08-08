@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use common::node_types::{Block, NodeDetails};
+use common::node_types::Block;
 use common::node_types::{BlockHash, BlockNumber};
 use serde::Serialize;
 
