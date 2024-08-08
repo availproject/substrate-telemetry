@@ -15,8 +15,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::inner_loop::{self};
+use crate::endpoints::{BlockHistory, ChainOverview, NodeList};
 use crate::find_location::find_location;
-use crate::state::chain_overview::ChainOverviewEx;
 use crate::state::NodeId;
 use common::id_type;
 use futures::{future, Sink, SinkExt};
@@ -117,15 +117,36 @@ impl Aggregator {
         Ok(metrics)
     }
 
-    /// Gather metrics from our aggregator loop
-    pub async fn gather_overview(&self) -> anyhow::Result<HashMap<H256, ChainOverviewEx>> {
+    pub async fn gather_overview_endpoint(&self) -> anyhow::Result<HashMap<H256, ChainOverview>> {
         let (tx, rx) = flume::unbounded();
         let msg = inner_loop::ToAggregator::GatherOverview(tx);
 
         self.0.tx_to_aggregator.send_async(msg).await?;
 
-        let overview = rx.recv_async().await?;
-        Ok(overview)
+        let data = rx.recv_async().await?;
+        Ok(data)
+    }
+
+    pub async fn gather_block_history_endpoint(
+        &self,
+    ) -> anyhow::Result<HashMap<H256, BlockHistory>> {
+        let (tx, rx) = flume::unbounded();
+        let msg = inner_loop::ToAggregator::GatherBlocks(tx);
+
+        self.0.tx_to_aggregator.send_async(msg).await?;
+
+        let data = rx.recv_async().await?;
+        Ok(data)
+    }
+
+    pub async fn gather_node_list_endpoint(&self) -> anyhow::Result<HashMap<H256, NodeList>> {
+        let (tx, rx) = flume::unbounded();
+        let msg = inner_loop::ToAggregator::GatherNodeList(tx);
+
+        self.0.tx_to_aggregator.send_async(msg).await?;
+
+        let data = rx.recv_async().await?;
+        Ok(data)
     }
 
     /// Return a sink that a shard can send messages into to be handled by the aggregator.

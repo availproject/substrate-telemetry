@@ -80,6 +80,7 @@ pub enum IntervalKind {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IntervalFromNode {
+    pub peer_id: Option<String>,
     pub kind: IntervalKind,
     pub start_timestamp: u64,
     pub end_timestamp: u64,
@@ -89,7 +90,9 @@ pub struct IntervalFromNode {
 pub struct BlockIntervalFromNode {
     pub block_number: u64,
     pub block_hash: String,
-    pub intervals: Vec<IntervalFromNode>,
+    pub proposal: Option<IntervalFromNode>,
+    pub import: Option<IntervalFromNode>,
+    pub sync: Option<IntervalFromNode>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -103,6 +106,7 @@ pub struct BlockRequestsDetail {
 pub struct BlockMetricsFromNode {
     pub block_intervals: Vec<BlockIntervalFromNode>,
     pub block_requests: Vec<BlockRequestsDetail>,
+    pub is_authority: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

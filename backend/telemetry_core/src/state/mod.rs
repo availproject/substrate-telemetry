@@ -15,12 +15,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 mod chain;
-pub mod chain_overview;
 mod chain_stats;
 mod counter;
 mod node;
-
 mod state;
 
-pub use node::Node;
+pub mod blocks;
+
+pub use chain::Chain;
+pub use node::{Node, UniqueNodeIdentity};
 pub use state::*;

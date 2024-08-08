@@ -1,4 +1,4 @@
-use crate::state::chain_overview::ChainOverviewEx;
+use crate::endpoints::{BlockHistory, ChainOverview, NodeList};
 
 use super::aggregator::{Aggregator, AggregatorOpts};
 use super::inner_loop::{self};
@@ -17,7 +17,9 @@ pub struct AggregatorSetInner {
     aggregators: Vec<Aggregator>,
     next_idx: AtomicUsize,
     metrics: Mutex<Vec<Metrics>>,
-    overview: Mutex<Vec<HashMap<H256, ChainOverviewEx>>>,
+    overview: Mutex<Vec<HashMap<H256, ChainOverview>>>,
+    block_history: Mutex<Vec<HashMap<H256, BlockHistory>>>,
+    node_list: Mutex<Vec<HashMap<H256, NodeList>>>,
 }
 
 impl AggregatorSet {
@@ -35,12 +37,16 @@ impl AggregatorSet {
 
         let initial_metrics = (0..num_aggregators).map(|_| Metrics::default()).collect();
         let initial_overview = (0..num_aggregators).map(|_| Default::default()).collect();
+        let initial_block_history = (0..num_aggregators).map(|_| Default::default()).collect();
+        let initial_node_list = (0..num_aggregators).map(|_| Default::default()).collect();
 
         let this = AggregatorSet(Arc::new(AggregatorSetInner {
             aggregators,
             next_idx: AtomicUsize::new(0),
             metrics: Mutex::new(initial_metrics),
             overview: Mutex::new(initial_overview),
+            block_history: Mutex::new(initial_block_history),
+            node_list: Mutex::new(initial_node_list),
         }));
 
         // Start asking for metrics:
@@ -59,10 +65,26 @@ impl AggregatorSet {
             tokio::spawn(async move {
                 loop {
                     let now = tokio::time::Instant::now();
-                    let overview = match a.gather_overview().await {
-                        Ok(overview) => overview,
+                    let overview = match a.gather_overview_endpoint().await {
+                        Ok(data) => data,
                         // Any error here is unlikely and probably means that the aggregator
                         // loop has failed completely.
+                        Err(e) => {
+                            log::error!("Error obtaining metrics (bailing): {}", e);
+                            return;
+                        }
+                    };
+
+                    let block_history = match a.gather_block_history_endpoint().await {
+                        Ok(data) => data,
+                        Err(e) => {
+                            log::error!("Error obtaining metrics (bailing): {}", e);
+                            return;
+                        }
+                    };
+
+                    let node_list = match a.gather_node_list_endpoint().await {
+                        Ok(data) => data,
                         Err(e) => {
                             log::error!("Error obtaining metrics (bailing): {}", e);
                             return;
@@ -74,6 +96,8 @@ impl AggregatorSet {
                     // it's probably a fatal error
                     {
                         inner.overview.lock().unwrap()[idx] = overview;
+                        inner.block_history.lock().unwrap()[idx] = block_history;
+                        inner.node_list.lock().unwrap()[idx] = node_list;
                     }
 
                     // Sleep *at least* 10 seconds. If it takes a while to get overview back, we'll
@@ -125,22 +149,73 @@ impl AggregatorSet {
     }
 
     /// Return the latest overview we've gathered so far from each internal aggregator.
-    pub fn overview(&self, genesis_hash: H256) -> Result<ChainOverviewEx, &str> {
+    pub fn overview_endpoint(&self, genesis_hash: H256) -> Result<ChainOverview, &str> {
         let Ok(lock) = self.0.overview.lock() else {
             return Err("Failed to acquire lock.");
         };
 
-        let Some(overviews) = lock.get(0) else {
+        let Some(datas) = lock.get(0) else {
             return Err("Failed to get any Data");
         };
 
-        let Some(overview) = overviews.get(&genesis_hash) else {
+        let Some(data) = datas.get(&genesis_hash) else {
             return Err("No genesis hash found");
         };
 
-        Ok(overview.clone())
+        Ok(data.clone())
     }
 
+    /// TODO
+    pub fn block_history_endpoint(&self, genesis_hash: H256) -> Result<BlockHistory, &str> {
+        let Ok(lock) = self.0.block_history.lock() else {
+            return Err("Failed to acquire lock.");
+        };
+
+        let Some(datas) = lock.get(0) else {
+            return Err("Failed to get any Data");
+        };
+
+        let Some(data) = datas.get(&genesis_hash) else {
+            return Err("No genesis hash found");
+        };
+
+        Ok(data.clone())
+    }
+
+    /// TODO
+    pub fn node_list_endpoint(&self, genesis_hash: H256) -> Result<NodeList, &str> {
+        let Ok(lock) = self.0.node_list.lock() else {
+            return Err("Failed to acquire lock.");
+        };
+
+        let Some(datas) = lock.get(0) else {
+            return Err("Failed to get any Data");
+        };
+
+        let Some(data) = datas.get(&genesis_hash) else {
+            return Err("No genesis hash found");
+        };
+
+        Ok(data.clone())
+    }
+
+    /*     /// Return the latest overview we've gathered so far from each internal aggregator.
+       pub fn blocks_debug(&self, genesis_hash: H256) -> Result<SerializedStoredOverviewData, &str> {
+           let Ok(lock) = self.0.blocks_debug.lock() else {
+               return Err("Failed to acquire lock.");
+           };
+
+           let Some(blocks_debug) = lock.get(0) else {
+               return Err("Failed to get any Data");
+           };
+
+           let Some(blocks_debug) = blocks_debug.get(&genesis_hash) else {
+               return Err("No genesis hash found");
+           };
+
+           Ok(blocks_debug.clone())
+       }
+    */
     /// Return a sink that a shard can send messages into to be handled by all aggregators.
     pub fn subscribe_shard(
         &self,
