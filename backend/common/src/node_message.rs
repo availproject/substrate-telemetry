@@ -61,6 +61,22 @@ pub enum Payload {
     NotifyFinalized(Finalized),
     AfgAuthoritySet(AfgAuthoritySet),
     HwBench(NodeHwBench),
+    BlobReceived(BlobReceived),
+    BlobAddedToPool(BlobAddedToPool),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlobReceived {
+    pub hash: BlockHash,
+    pub size: usize,
+    pub timestamp: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlobAddedToPool {
+    pub hash: BlockHash,
+    pub size: usize,
+    pub timestamp: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

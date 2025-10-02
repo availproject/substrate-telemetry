@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use common::node_message::Payload;
+use common::node_message::{BlobAddedToPool, BlobReceived, Payload};
 use common::node_types::BlockHash;
 use common::node_types::{Block, Timestamp};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
 use once_cell::sync::Lazy;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -66,6 +66,8 @@ pub struct Chain {
     stats: ChainStats,
     /// Timestamp of when the stats were last regenerated.
     stats_last_regenerated: Instant,
+    blob_received: VecDeque<BlobReceived>,
+    blob_added_to_pool: VecDeque<BlobAddedToPool>,
 }
 
 pub enum AddNodeResult {
@@ -118,6 +120,8 @@ impl Chain {
             stats_collator: Default::default(),
             stats: Default::default(),
             stats_last_regenerated: Instant::now(),
+            blob_received: VecDeque::with_capacity(125),
+            blob_added_to_pool: VecDeque::with_capacity(125),
         }
     }
 
@@ -231,6 +235,18 @@ impl Chain {
                         .update_hwbench(old_hwbench.as_ref(), CounterValue::Decrement);
                     self.stats_collator
                         .update_hwbench(node.hwbench(), CounterValue::Increment);
+                }
+                Payload::BlobReceived(ref prop) => {
+                    self.blob_received.push_back(prop.clone());
+                    if self.blob_received.len() > 100 {
+                        self.blob_received.pop_front();
+                    }
+                }
+                Payload::BlobAddedToPool(ref prop) => {
+                    self.blob_added_to_pool.push_back(prop.clone());
+                    if self.blob_added_to_pool.len() > 100 {
+                        self.blob_added_to_pool.pop_front();
+                    }
                 }
                 _ => {}
             }

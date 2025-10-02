@@ -78,6 +78,10 @@ pub enum Payload {
     AfgAuthoritySet(AfgAuthoritySet),
     #[serde(rename = "sysinfo.hwbench")]
     HwBench(NodeHwBench),
+    #[serde(rename = "blob.received")]
+    BlobReceived(BlobReceived),
+    #[serde(rename = "blob.addedToPool")]
+    BlobAddedToPool(BlobAddedToPool),
 }
 
 impl From<Payload> for internal::Payload {
@@ -89,6 +93,42 @@ impl From<Payload> for internal::Payload {
             Payload::NotifyFinalized(m) => internal::Payload::NotifyFinalized(m.into()),
             Payload::AfgAuthoritySet(m) => internal::Payload::AfgAuthoritySet(m.into()),
             Payload::HwBench(m) => internal::Payload::HwBench(m.into()),
+            Payload::BlobReceived(m) => internal::Payload::BlobReceived(m.into()),
+            Payload::BlobAddedToPool(m) => internal::Payload::BlobAddedToPool(m.into()),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BlobReceived {
+    pub hash: Hash,
+    pub size: usize,
+    pub timestamp: String,
+}
+
+impl From<BlobReceived> for internal::BlobReceived {
+    fn from(msg: BlobReceived) -> Self {
+        internal::BlobReceived {
+            hash: msg.hash.into(),
+            timestamp: msg.timestamp.into(),
+            size: msg.size.into(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BlobAddedToPool {
+    pub hash: Hash,
+    pub size: usize,
+    pub timestamp: String,
+}
+
+impl From<BlobAddedToPool> for internal::BlobAddedToPool {
+    fn from(msg: BlobAddedToPool) -> Self {
+        internal::BlobAddedToPool {
+            hash: msg.hash.into(),
+            timestamp: msg.timestamp.into(),
+            size: msg.size.into(),
         }
     }
 }
