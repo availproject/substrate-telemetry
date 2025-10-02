@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use common::node_message::{BlobAddedToPool, BlobReceived, Payload};
+use common::node_message::{Blob, BlobAddedToPool, BlobReceived, Payload};
 use common::node_types::BlockHash;
 use common::node_types::{Block, Timestamp};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
@@ -427,7 +427,61 @@ impl Chain {
         &self.stats
     }
 
-    pub fn blob_endpoint(&self) -> Vec<BlobReceived> {
-        self.blob_received.clone().make_contiguous().to_vec()
+    pub fn blob_endpoint(&self) -> Vec<Blob> {
+        let mut blobs = Vec::with_capacity(125);
+
+        // Make contiguous
+        let mut submitted = self.blob_added_to_pool.clone().make_contiguous().to_vec();
+        let mut received = self.blob_received.clone().make_contiguous().to_vec();
+
+        // Sort by timestamp
+        submitted.sort_by(|x, y| y.timestamp.cmp(&x.timestamp));
+        received.sort_by(|x, y| y.timestamp.cmp(&x.timestamp));
+
+        for sub in submitted {
+            let mut blob = Blob {
+                hash: sub.hash,
+                size: sub.size,
+                rpc_timestamp: None,
+                added_to_pool_timestamp: Some(sub.timestamp.clone()),
+                duration: None,
+            };
+
+            // Find matching rec
+            let Some(pos) = received.iter().position(|x| x.hash == sub.hash) else {
+                blobs.push(blob);
+                continue;
+            };
+
+            let rec = received.remove(pos);
+            blob.rpc_timestamp = Some(rec.timestamp.clone());
+
+            let Ok(rpc_t) = rec.timestamp.parse::<u128>() else {
+                blobs.push(blob);
+                continue;
+            };
+
+            let Ok(add_t) = sub.timestamp.parse::<u128>() else {
+                blobs.push(blob);
+                continue;
+            };
+
+            blob.duration = Some(add_t.saturating_sub(rpc_t));
+            blobs.push(blob);
+        }
+
+        for rec in received {
+            let blob = Blob {
+                hash: rec.hash,
+                size: rec.size,
+                rpc_timestamp: Some(rec.timestamp),
+                added_to_pool_timestamp: None,
+                duration: None,
+            };
+
+            blobs.push(blob);
+        }
+
+        blobs
     }
 }

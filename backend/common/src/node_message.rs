@@ -80,6 +80,17 @@ pub struct BlobAddedToPool {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Blob {
+    pub hash: BlockHash,
+    pub size: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rpc_timestamp: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub added_to_pool_timestamp: Option<String>,
+    pub duration: Option<u128>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SystemConnected {
     pub genesis_hash: BlockHash,
     pub node: NodeDetails,

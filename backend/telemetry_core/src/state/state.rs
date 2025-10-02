@@ -17,7 +17,7 @@
 use super::node::Node;
 use crate::feed_message::{ChainStats, FeedMessageSerializer};
 use crate::find_location;
-use common::node_message::{BlobReceived, Payload};
+use common::node_message::{Blob, Payload};
 use common::node_types::{Block, BlockHash, NodeDetails, Timestamp};
 use common::{id_type, DenseMap};
 use std::collections::{HashMap, HashSet};
@@ -273,7 +273,7 @@ impl<'a> StateChain<'a> {
     pub fn stats(&self) -> &ChainStats {
         self.chain.stats()
     }
-    pub fn blob_endpoint(&self) -> Vec<BlobReceived> {
+    pub fn blob_endpoint(&self) -> Vec<Blob> {
         self.chain.blob_endpoint()
     }
 }

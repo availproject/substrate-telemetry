@@ -18,7 +18,7 @@ use super::inner_loop;
 use crate::find_location::find_location;
 use crate::state::NodeId;
 use common::id_type;
-use common::node_message::BlobReceived;
+use common::node_message::Blob;
 use futures::{future, Sink, SinkExt};
 use primitive_types::H256;
 use std::collections::HashMap;
@@ -117,7 +117,7 @@ impl Aggregator {
         Ok(metrics)
     }
 
-    pub async fn gather_blobs(&self) -> anyhow::Result<HashMap<H256, Vec<BlobReceived>>> {
+    pub async fn gather_blobs(&self) -> anyhow::Result<HashMap<H256, Vec<Blob>>> {
         let (tx, rx) = flume::unbounded();
         let msg = inner_loop::ToAggregator::GatherBlobs(tx);
 

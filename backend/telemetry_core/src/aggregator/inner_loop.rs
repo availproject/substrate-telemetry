@@ -19,7 +19,7 @@ use crate::feed_message::{self, FeedMessageSerializer};
 use crate::state::{self, NodeId, State};
 use crate::{find_location, AggregatorOpts};
 use bimap::BiMap;
-use common::node_message::BlobReceived;
+use common::node_message::Blob;
 use common::{
     internal_messages::{self, MuteReason, ShardNodeId},
     node_message,
@@ -42,7 +42,7 @@ pub enum ToAggregator {
     /// Hand back some metrics. The provided sender is expected not to block when
     /// a message is sent into it.
     GatherMetrics(flume::Sender<Metrics>),
-    GatherBlobs(flume::Sender<HashMap<BlockHash, Vec<BlobReceived>>>),
+    GatherBlobs(flume::Sender<HashMap<BlockHash, Vec<Blob>>>),
 }
 
 /// An incoming shard connection can send these messages to the aggregator.
@@ -290,8 +290,8 @@ impl InnerLoop {
     }
 
     /// Gather and return some metrics.\
-    fn handle_gather_blobs(&mut self, rx: flume::Sender<HashMap<BlockHash, Vec<BlobReceived>>>) {
-        let mut datas: HashMap<BlockHash, Vec<BlobReceived>> = HashMap::new();
+    fn handle_gather_blobs(&mut self, rx: flume::Sender<HashMap<BlockHash, Vec<Blob>>>) {
+        let mut datas: HashMap<BlockHash, Vec<Blob>> = HashMap::new();
 
         for chain_state in self.node_state.iter_chains() {
             let data = chain_state.blob_endpoint();

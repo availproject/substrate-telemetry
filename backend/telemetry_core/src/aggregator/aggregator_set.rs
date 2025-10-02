@@ -1,6 +1,6 @@
 use super::aggregator::{Aggregator, AggregatorOpts};
 use super::inner_loop;
-use common::node_message::BlobReceived;
+use common::node_message::Blob;
 use common::EitherSink;
 use futures::{Sink, SinkExt};
 use inner_loop::{FromShardWebsocket, Metrics};
@@ -16,7 +16,7 @@ pub struct AggregatorSetInner {
     aggregators: Vec<Aggregator>,
     next_idx: AtomicUsize,
     metrics: Mutex<Vec<Metrics>>,
-    blob_list: Mutex<Vec<HashMap<H256, Vec<BlobReceived>>>>,
+    blob_list: Mutex<Vec<HashMap<H256, Vec<Blob>>>>,
 }
 
 impl AggregatorSet {
@@ -121,7 +121,7 @@ impl AggregatorSet {
     }
 
     /// TODO
-    pub fn blob_endpoint(&self, genesis_hash: H256) -> Result<Vec<BlobReceived>, &str> {
+    pub fn blob_endpoint(&self, genesis_hash: H256) -> Result<Vec<Blob>, &str> {
         let Ok(lock) = self.0.blob_list.lock() else {
             return Err("Failed to acquire lock.");
         };
