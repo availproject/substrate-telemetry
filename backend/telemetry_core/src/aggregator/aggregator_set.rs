@@ -1,8 +1,11 @@
 use super::aggregator::{Aggregator, AggregatorOpts};
 use super::inner_loop;
+use common::node_message::BlobReceived;
 use common::EitherSink;
 use futures::{Sink, SinkExt};
 use inner_loop::{FromShardWebsocket, Metrics};
+use primitive_types::H256;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -13,6 +16,7 @@ pub struct AggregatorSetInner {
     aggregators: Vec<Aggregator>,
     next_idx: AtomicUsize,
     metrics: Mutex<Vec<Metrics>>,
+    blob_list: Mutex<Vec<HashMap<H256, Vec<BlobReceived>>>>,
 }
 
 impl AggregatorSet {
@@ -29,15 +33,18 @@ impl AggregatorSet {
         .await?;
 
         let initial_metrics = (0..num_aggregators).map(|_| Metrics::default()).collect();
+        let blob_list = (0..num_aggregators).map(|_| Default::default()).collect();
 
         let this = AggregatorSet(Arc::new(AggregatorSetInner {
             aggregators,
             next_idx: AtomicUsize::new(0),
             metrics: Mutex::new(initial_metrics),
+            blob_list: Mutex::new(blob_list),
         }));
 
         // Start asking for metrics:
         this.spawn_metrics_loops();
+        this.spawn_blobs_loops();
 
         Ok(this)
     }
@@ -77,11 +84,58 @@ impl AggregatorSet {
         }
     }
 
+    fn spawn_blobs_loops(&self) {
+        let aggregators = self.0.aggregators.clone();
+        for (idx, a) in aggregators.into_iter().enumerate() {
+            let inner = Arc::clone(&self.0);
+            tokio::spawn(async move {
+                loop {
+                    let now = tokio::time::Instant::now();
+                    let overview = match a.gather_blobs().await {
+                        Ok(overview) => overview,
+                        // Any error here is unlikely and probably means that the aggregator
+                        // loop has failed completely.
+                        Err(e) => {
+                            log::error!("Error obtaining metrics (bailing): {}", e);
+                            return;
+                        }
+                    };
+
+                    // Lock, update the stored metrics and drop the lock immediately.
+                    // We discard any error; if something went wrong talking to the inner loop,
+                    // it's probably a fatal error
+                    {
+                        inner.blob_list.lock().unwrap()[idx] = overview;
+                    }
+
+                    // Sleep *at least* 1 seconds.
+                    tokio::time::sleep_until(now + tokio::time::Duration::from_secs(1)).await;
+                }
+            });
+        }
+    }
+
     /// Return the latest metrics we've gathered so far from each internal aggregator.
     pub fn latest_metrics(&self) -> Vec<Metrics> {
         self.0.metrics.lock().unwrap().clone()
     }
 
+    /// TODO
+    pub fn blob_endpoint(&self, genesis_hash: H256) -> Result<Vec<BlobReceived>, &str> {
+        let Ok(lock) = self.0.blob_list.lock() else {
+            return Err("Failed to acquire lock.");
+        };
+
+        let Some(datas) = lock.get(0) else {
+            return Err("Failed to get any Data");
+        };
+
+        let Some(data) = datas.get(&genesis_hash) else {
+            return Err("No genesis hash found");
+        };
+
+        Ok(data.clone())
+    }
     /// Return a sink that a shard can send messages into to be handled by all aggregators.
     pub fn subscribe_shard(
         &self,

@@ -19,6 +19,7 @@ use crate::feed_message::{self, FeedMessageSerializer};
 use crate::state::{self, NodeId, State};
 use crate::{find_location, AggregatorOpts};
 use bimap::BiMap;
+use common::node_message::BlobReceived;
 use common::{
     internal_messages::{self, MuteReason, ShardNodeId},
     node_message,
@@ -41,6 +42,7 @@ pub enum ToAggregator {
     /// Hand back some metrics. The provided sender is expected not to block when
     /// a message is sent into it.
     GatherMetrics(flume::Sender<Metrics>),
+    GatherBlobs(flume::Sender<HashMap<BlockHash, Vec<BlobReceived>>>),
 }
 
 /// An incoming shard connection can send these messages to the aggregator.
@@ -226,6 +228,7 @@ impl InnerLoop {
                         dropped_messages2.load(Ordering::Relaxed),
                         total_messages2.load(Ordering::Relaxed),
                     ),
+                    ToAggregator::GatherBlobs(tx) => self.handle_gather_blobs(tx),
                 }
             }
         });
@@ -284,6 +287,20 @@ impl InnerLoop {
             connected_feeds,
             connected_shards,
         });
+    }
+
+    /// Gather and return some metrics.\
+    fn handle_gather_blobs(&mut self, rx: flume::Sender<HashMap<BlockHash, Vec<BlobReceived>>>) {
+        let mut datas: HashMap<BlockHash, Vec<BlobReceived>> = HashMap::new();
+
+        for chain_state in self.node_state.iter_chains() {
+            let data = chain_state.blob_endpoint();
+            let genesis_hash = chain_state.genesis_hash();
+            datas.insert(genesis_hash, data);
+        }
+
+        // Ignore error sending; assume the receiver stopped caring and dropped the channel:
+        let _ = rx.send(datas);
     }
 
     /// Handle messages that come from the node geographical locator.

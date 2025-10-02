@@ -426,4 +426,8 @@ impl Chain {
     pub fn stats(&self) -> &ChainStats {
         &self.stats
     }
+
+    pub fn blob_endpoint(&self) -> Vec<BlobReceived> {
+        self.blob_received.clone().make_contiguous().to_vec()
+    }
 }
