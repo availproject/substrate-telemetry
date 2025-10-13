@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use common::node_message::{Blob, Payload};
+use common::node_message::{Blob, BlobRequestData, Payload};
 use common::node_types::BlockHash;
 use common::node_types::{Block, Timestamp};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
@@ -66,6 +66,7 @@ pub struct Chain {
     stats: ChainStats,
     /// Timestamp of when the stats were last regenerated.
     stats_last_regenerated: Instant,
+    /// Blobs statistics
     blobs: VecDeque<Blob>,
 }
 
@@ -253,7 +254,8 @@ impl Chain {
                         blob.added_to_pool_timestamp = Some(timestamp);
 
                         if let Some(rpc_timestamp) = blob.rpc_timestamp {
-                            blob.duration = Some(timestamp.saturating_sub(rpc_timestamp));
+                            blob.added_to_pool_duration =
+                                Some(timestamp.saturating_sub(rpc_timestamp));
                         }
                     } else {
                         self.blobs.push_back(prop.into());
@@ -262,12 +264,57 @@ impl Chain {
                         }
                     }
                 }
-
                 Payload::BlobCompression(ref prop) => {
+                    dbg!(&prop);
                     if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
+                        blob.compression_duration = Some(prop.duration);
                         if prop.org_size != 0 && prop.new_size != 0 {
                             blob.compression_rate =
                                 Some(prop.org_size as f32 / prop.new_size as f32);
+                        }
+                    } else {
+                        self.blobs.push_back(prop.into());
+                        if self.blobs.len() > 100 {
+                            self.blobs.pop_front();
+                        }
+                    }
+                }
+                Payload::BlobPolyGrid(ref prop) => {
+                    dbg!(&prop);
+                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
+                        blob.poly_grid_duration = Some(prop.duration);
+                    } else {
+                        self.blobs.push_back(prop.into());
+                        if self.blobs.len() > 100 {
+                            self.blobs.pop_front();
+                        }
+                    }
+                }
+                Payload::BlobCommitment(ref prop) => {
+                    dbg!(&prop);
+                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
+                        blob.commitment_duration = Some(prop.duration);
+                    } else {
+                        self.blobs.push_back(prop.into());
+                        if self.blobs.len() > 100 {
+                            self.blobs.pop_front();
+                        }
+                    }
+                }
+                Payload::BlobRequest(ref prop) => {
+                    dbg!(&prop);
+                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
+                        let rq_data = BlobRequestData {
+                            duration: prop.duration,
+                            from: prop.from.clone(),
+                            to: prop.to.clone(),
+                            success: prop.success,
+                        };
+                        blob.requests_durations.push(rq_data)
+                    } else {
+                        self.blobs.push_back(prop.into());
+                        if self.blobs.len() > 100 {
+                            self.blobs.pop_front();
                         }
                     }
                 }
