@@ -63,6 +63,14 @@ pub enum Payload {
     HwBench(NodeHwBench),
     BlobReceived(BlobReceived),
     BlobAddedToPool(BlobAddedToPool),
+    BlobCompression(BlobCompression),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlobCompression {
+    pub org_size: usize,
+    pub new_size: usize,
+    pub hash: BlockHash,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -84,10 +92,54 @@ pub struct Blob {
     pub hash: BlockHash,
     pub size: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rpc_timestamp: Option<String>,
+    pub rpc_timestamp: Option<u128>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub added_to_pool_timestamp: Option<String>,
+    pub added_to_pool_timestamp: Option<u128>,
     pub duration: Option<u128>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compression_rate: Option<f32>,
+}
+
+impl From<&BlobAddedToPool> for Blob {
+    fn from(value: &BlobAddedToPool) -> Self {
+        let ts = value.timestamp.parse::<u128>().unwrap_or(0u128);
+
+        Self {
+            hash: value.hash,
+            size: value.size,
+            rpc_timestamp: None,
+            added_to_pool_timestamp: Some(ts),
+            duration: None,
+            compression_rate: None,
+        }
+    }
+}
+
+impl From<BlobAddedToPool> for Blob {
+    fn from(value: BlobAddedToPool) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&BlobReceived> for Blob {
+    fn from(value: &BlobReceived) -> Self {
+        let ts = value.timestamp.parse::<u128>().unwrap_or(0u128);
+
+        Self {
+            hash: value.hash,
+            size: value.size,
+            rpc_timestamp: Some(ts),
+            added_to_pool_timestamp: None,
+            duration: None,
+            compression_rate: None,
+        }
+    }
+}
+
+impl From<BlobReceived> for Blob {
+    fn from(value: BlobReceived) -> Self {
+        Self::from(&value)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

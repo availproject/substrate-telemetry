@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use common::node_message::{Blob, BlobAddedToPool, BlobReceived, Payload};
+use common::node_message::{Blob, Payload};
 use common::node_types::BlockHash;
 use common::node_types::{Block, Timestamp};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
@@ -66,8 +66,7 @@ pub struct Chain {
     stats: ChainStats,
     /// Timestamp of when the stats were last regenerated.
     stats_last_regenerated: Instant,
-    blob_received: VecDeque<BlobReceived>,
-    blob_added_to_pool: VecDeque<BlobAddedToPool>,
+    blobs: VecDeque<Blob>,
 }
 
 pub enum AddNodeResult {
@@ -120,8 +119,7 @@ impl Chain {
             stats_collator: Default::default(),
             stats: Default::default(),
             stats_last_regenerated: Instant::now(),
-            blob_received: VecDeque::with_capacity(125),
-            blob_added_to_pool: VecDeque::with_capacity(125),
+            blobs: VecDeque::with_capacity(125),
         }
     }
 
@@ -237,15 +235,40 @@ impl Chain {
                         .update_hwbench(node.hwbench(), CounterValue::Increment);
                 }
                 Payload::BlobReceived(ref prop) => {
-                    self.blob_received.push_back(prop.clone());
-                    if self.blob_received.len() > 100 {
-                        self.blob_received.pop_front();
+                    dbg!(&prop);
+                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
+                        let timestamp = prop.timestamp.parse::<u128>().unwrap_or(0u128);
+                        blob.rpc_timestamp = Some(timestamp);
+                    } else {
+                        self.blobs.push_back(prop.into());
+                        if self.blobs.len() > 100 {
+                            self.blobs.pop_front();
+                        }
                     }
                 }
                 Payload::BlobAddedToPool(ref prop) => {
-                    self.blob_added_to_pool.push_back(prop.clone());
-                    if self.blob_added_to_pool.len() > 100 {
-                        self.blob_added_to_pool.pop_front();
+                    dbg!(&prop);
+                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
+                        let timestamp = prop.timestamp.parse::<u128>().unwrap_or(0u128);
+                        blob.added_to_pool_timestamp = Some(timestamp);
+
+                        if let Some(rpc_timestamp) = blob.rpc_timestamp {
+                            blob.duration = Some(timestamp.saturating_sub(rpc_timestamp));
+                        }
+                    } else {
+                        self.blobs.push_back(prop.into());
+                        if self.blobs.len() > 100 {
+                            self.blobs.pop_front();
+                        }
+                    }
+                }
+
+                Payload::BlobCompression(ref prop) => {
+                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
+                        if prop.org_size != 0 && prop.new_size != 0 {
+                            blob.compression_rate =
+                                Some(prop.org_size as f32 / prop.new_size as f32);
+                        }
                     }
                 }
                 _ => {}
@@ -428,59 +451,21 @@ impl Chain {
     }
 
     pub fn blob_endpoint(&self) -> Vec<Blob> {
-        let mut blobs = Vec::with_capacity(125);
-
         // Make contiguous
-        let mut submitted = self.blob_added_to_pool.clone().make_contiguous().to_vec();
-        let mut received = self.blob_received.clone().make_contiguous().to_vec();
+        let mut blobs = self.blobs.clone().make_contiguous().to_vec();
 
-        // Sort by timestamp
-        submitted.sort_by(|x, y| y.timestamp.cmp(&x.timestamp));
-        received.sort_by(|x, y| y.timestamp.cmp(&x.timestamp));
+        // TODO better sort
+        blobs.sort_by(|x, y| {
+            if y.added_to_pool_timestamp.is_some() {
+                if x.added_to_pool_timestamp.is_some() {
+                    return y.added_to_pool_timestamp.cmp(&x.added_to_pool_timestamp);
+                }
 
-        for sub in submitted {
-            let mut blob = Blob {
-                hash: sub.hash,
-                size: sub.size,
-                rpc_timestamp: None,
-                added_to_pool_timestamp: Some(sub.timestamp.clone()),
-                duration: None,
-            };
+                return y.added_to_pool_timestamp.cmp(&x.rpc_timestamp);
+            }
 
-            // Find matching rec
-            let Some(pos) = received.iter().position(|x| x.hash == sub.hash) else {
-                blobs.push(blob);
-                continue;
-            };
-
-            let rec = received.remove(pos);
-            blob.rpc_timestamp = Some(rec.timestamp.clone());
-
-            let Ok(rpc_t) = rec.timestamp.parse::<u128>() else {
-                blobs.push(blob);
-                continue;
-            };
-
-            let Ok(add_t) = sub.timestamp.parse::<u128>() else {
-                blobs.push(blob);
-                continue;
-            };
-
-            blob.duration = Some(add_t.saturating_sub(rpc_t));
-            blobs.push(blob);
-        }
-
-        for rec in received {
-            let blob = Blob {
-                hash: rec.hash,
-                size: rec.size,
-                rpc_timestamp: Some(rec.timestamp),
-                added_to_pool_timestamp: None,
-                duration: None,
-            };
-
-            blobs.push(blob);
-        }
+            return y.rpc_timestamp.cmp(&x.rpc_timestamp);
+        });
 
         blobs
     }

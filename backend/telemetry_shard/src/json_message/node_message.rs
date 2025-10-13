@@ -82,6 +82,8 @@ pub enum Payload {
     BlobReceived(BlobReceived),
     #[serde(rename = "blob.addedToPool")]
     BlobAddedToPool(BlobAddedToPool),
+    #[serde(rename = "blob.compression")]
+    BlobCompression(BlobCompression),
 }
 
 impl From<Payload> for internal::Payload {
@@ -95,6 +97,24 @@ impl From<Payload> for internal::Payload {
             Payload::HwBench(m) => internal::Payload::HwBench(m.into()),
             Payload::BlobReceived(m) => internal::Payload::BlobReceived(m.into()),
             Payload::BlobAddedToPool(m) => internal::Payload::BlobAddedToPool(m.into()),
+            Payload::BlobCompression(m) => internal::Payload::BlobCompression(m.into()),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BlobCompression {
+    pub org_size: usize,
+    pub new_size: usize,
+    pub hash: Hash,
+}
+
+impl From<BlobCompression> for internal::BlobCompression {
+    fn from(msg: BlobCompression) -> Self {
+        internal::BlobCompression {
+            org_size: msg.org_size.into(),
+            new_size: msg.new_size.into(),
+            hash: msg.hash.into(),
         }
     }
 }
