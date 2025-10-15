@@ -236,7 +236,6 @@ impl Chain {
                         .update_hwbench(node.hwbench(), CounterValue::Increment);
                 }
                 Payload::BlobReceived(ref prop) => {
-                    dbg!(&prop);
                     if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
                         let timestamp = prop.timestamp.parse::<u128>().unwrap_or(0u128);
                         blob.rpc_timestamp = Some(timestamp);
@@ -248,7 +247,6 @@ impl Chain {
                     }
                 }
                 Payload::BlobAddedToPool(ref prop) => {
-                    dbg!(&prop);
                     if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
                         let timestamp = prop.timestamp.parse::<u128>().unwrap_or(0u128);
                         blob.added_to_pool_timestamp = Some(timestamp);
@@ -265,7 +263,6 @@ impl Chain {
                     }
                 }
                 Payload::BlobCompression(ref prop) => {
-                    dbg!(&prop);
                     if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
                         blob.compression_duration = Some(prop.duration);
                         if prop.org_size != 0 && prop.new_size != 0 {
@@ -280,7 +277,6 @@ impl Chain {
                     }
                 }
                 Payload::BlobPolyGrid(ref prop) => {
-                    dbg!(&prop);
                     if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
                         blob.poly_grid_duration = Some(prop.duration);
                     } else {
@@ -291,7 +287,6 @@ impl Chain {
                     }
                 }
                 Payload::BlobCommitment(ref prop) => {
-                    dbg!(&prop);
                     if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
                         blob.commitment_duration = Some(prop.duration);
                     } else {
@@ -302,7 +297,6 @@ impl Chain {
                     }
                 }
                 Payload::BlobRequest(ref prop) => {
-                    dbg!(&prop);
                     if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
                         let rq_data = BlobRequestData {
                             duration: prop.duration,
