@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use common::node_message::{Blob, BlobRequestData, Payload};
+use common::node_message::{Blob, Payload};
 use common::node_types::BlockHash;
 use common::node_types::{Block, Timestamp};
 use common::{id_type, time, DenseMap, MostSeen, NumStats};
@@ -39,6 +39,29 @@ pub type Label = Box<str>;
 
 const STALE_TIMEOUT: u64 = 2 * 60 * 1000; // 2 minutes
 const STATS_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
+const MAX_BLOBS_STORED: usize = 200;
+
+#[derive(Debug, Clone, Default)]
+pub struct Blobs {
+    /// Blobs statistics
+    blobs: VecDeque<Blob>,
+}
+
+impl Blobs {
+    // Get or create
+    fn get(&mut self, blob_hash: BlockHash) -> &mut Blob {
+        if let Some(pos) = self.blobs.iter().position(|x| x.hash == blob_hash) {
+            return self.blobs.get_mut(pos).expect("qed");
+        }
+
+        self.blobs.push_back(Blob::new(blob_hash));
+        if self.blobs.len() > MAX_BLOBS_STORED {
+            self.blobs.pop_front();
+        }
+
+        self.blobs.back_mut().expect("qed")
+    }
+}
 
 pub struct Chain {
     /// Labels that nodes use for this chain. We keep track of
@@ -66,8 +89,7 @@ pub struct Chain {
     stats: ChainStats,
     /// Timestamp of when the stats were last regenerated.
     stats_last_regenerated: Instant,
-    /// Blobs statistics
-    blobs: VecDeque<Blob>,
+    blobs: Blobs,
 }
 
 pub enum AddNodeResult {
@@ -120,7 +142,7 @@ impl Chain {
             stats_collator: Default::default(),
             stats: Default::default(),
             stats_last_regenerated: Instant::now(),
-            blobs: VecDeque::with_capacity(125),
+            blobs: Blobs::default(),
         }
     }
 
@@ -153,7 +175,7 @@ impl Chain {
     pub fn remove_node(&mut self, node_id: ChainNodeId) -> RemoveNodeResult {
         let node = match self.nodes.remove(node_id) {
             Some(node) => node,
-            None => {
+            _ => {
                 return RemoveNodeResult {
                     chain_renamed: false,
                 }
@@ -236,80 +258,33 @@ impl Chain {
                         .update_hwbench(node.hwbench(), CounterValue::Increment);
                 }
                 Payload::BlobReceived(ref prop) => {
-                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
-                        let timestamp = prop.timestamp.parse::<u128>().unwrap_or(0u128);
-                        blob.rpc_timestamp = Some(timestamp);
-                    } else {
-                        self.blobs.push_back(prop.into());
-                        if self.blobs.len() > 100 {
-                            self.blobs.pop_front();
-                        }
-                    }
+                    let blob = self.blobs.get(prop.hash);
+                    blob.received(nid.0, prop);
                 }
                 Payload::BlobAddedToPool(ref prop) => {
-                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
-                        let timestamp = prop.timestamp.parse::<u128>().unwrap_or(0u128);
-                        blob.added_to_pool_timestamp = Some(timestamp);
-
-                        if let Some(rpc_timestamp) = blob.rpc_timestamp {
-                            blob.added_to_pool_duration =
-                                Some(timestamp.saturating_sub(rpc_timestamp));
-                        }
-                    } else {
-                        self.blobs.push_back(prop.into());
-                        if self.blobs.len() > 100 {
-                            self.blobs.pop_front();
-                        }
-                    }
+                    let blob = self.blobs.get(prop.hash);
+                    blob.added_to_pool(nid.0, prop);
                 }
                 Payload::BlobCompression(ref prop) => {
-                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
-                        blob.compression_duration = Some(prop.duration);
-                        if prop.org_size != 0 && prop.new_size != 0 {
-                            blob.compression_rate =
-                                Some(prop.org_size as f32 / prop.new_size as f32);
-                        }
-                    } else {
-                        self.blobs.push_back(prop.into());
-                        if self.blobs.len() > 100 {
-                            self.blobs.pop_front();
-                        }
-                    }
+                    let blob = self.blobs.get(prop.hash);
+                    blob.compression(nid.0, prop);
                 }
                 Payload::BlobPolyGrid(ref prop) => {
-                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
-                        blob.poly_grid_duration = Some(prop.duration);
-                    } else {
-                        self.blobs.push_back(prop.into());
-                        if self.blobs.len() > 100 {
-                            self.blobs.pop_front();
-                        }
-                    }
+                    let blob = self.blobs.get(prop.hash);
+                    blob.poly_grid(nid.0, prop);
                 }
                 Payload::BlobCommitment(ref prop) => {
-                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
-                        blob.commitment_duration = Some(prop.duration);
-                    } else {
-                        self.blobs.push_back(prop.into());
-                        if self.blobs.len() > 100 {
-                            self.blobs.pop_front();
-                        }
-                    }
+                    let blob = self.blobs.get(prop.hash);
+                    blob.commitment(nid.0, prop);
                 }
                 Payload::BlobRequest(ref prop) => {
-                    if let Some(blob) = self.blobs.iter_mut().find(|x| x.hash == prop.hash) {
-                        let rq_data = BlobRequestData {
-                            duration: prop.duration,
-                            from: prop.from.clone(),
-                            to: prop.to.clone(),
-                            success: prop.success,
-                        };
-                        blob.requests_durations.push(rq_data)
-                    } else {
-                        self.blobs.push_back(prop.into());
-                        if self.blobs.len() > 100 {
-                            self.blobs.pop_front();
-                        }
+                    let blob = self.blobs.get(prop.hash);
+                    blob.request(nid.0, prop);
+                }
+                Payload::BlobDropped(ref prop) => {
+                    if let Some(hash) = &prop.hash {
+                        let blob = self.blobs.get(*hash);
+                        blob.dropped(nid.0, prop);
                     }
                 }
                 _ => {}
@@ -345,7 +320,7 @@ impl Chain {
 
         let node = match self.nodes.get_mut(nid) {
             Some(node) => node,
-            None => return,
+            _ => return,
         };
 
         if node.update_block(*block) {
@@ -387,7 +362,7 @@ impl Chain {
         let threshold = now - STALE_TIMEOUT;
         let timestamp = match self.timestamp {
             Some(ts) => ts,
-            None => return,
+            _ => return,
         };
 
         if timestamp > threshold {
@@ -493,20 +468,39 @@ impl Chain {
 
     pub fn blob_endpoint(&self) -> Vec<Blob> {
         // Make contiguous
-        let mut blobs = self.blobs.clone().make_contiguous().to_vec();
+        let mut blobs = self.blobs.blobs.clone().make_contiguous().to_vec();
 
-        // TODO better sort
+        // TODO do some sort
         blobs.sort_by(|x, y| {
-            if y.added_to_pool_timestamp.is_some() {
-                if x.added_to_pool_timestamp.is_some() {
-                    return y.added_to_pool_timestamp.cmp(&x.added_to_pool_timestamp);
+            let mut x_rpc: Option<u64> = None;
+            let mut y_rpc: Option<u64> = None;
+            for view in x.map.values() {
+                if let Some(timestamp) = view.rpc_timestamp {
+                    x_rpc = Some(timestamp);
+                    break;
                 }
-
-                return y.added_to_pool_timestamp.cmp(&x.rpc_timestamp);
+            }
+            for view in y.map.values() {
+                if let Some(timestamp) = view.rpc_timestamp {
+                    y_rpc = Some(timestamp);
+                    break;
+                }
             }
 
-            return y.rpc_timestamp.cmp(&x.rpc_timestamp);
+            return y_rpc.cmp(&x_rpc);
         });
+
+        for blob in blobs.iter_mut() {
+            for (node_id, view) in blob.map.iter_mut() {
+                let network_id = if let Some(node) = self.nodes.get((*node_id).into()) {
+                    Some(node.details().network_id.to_string())
+                } else {
+                    None
+                };
+
+                view.network_id = network_id;
+            }
+        }
 
         blobs
     }

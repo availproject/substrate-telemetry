@@ -320,21 +320,21 @@ where
                     break;
                 }
 
+                // TODO
+                // let s: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+                // dbg!(&s);
+
                 // Deserialize from JSON, warning in debug mode if deserialization fails:
                 let node_message: json_message::NodeMessage = match serde_json::from_slice(&bytes) {
                     Ok(node_message) => node_message,
-                    #[cfg(debug_assertions)]
-                    Err(e) => {
-                        let bytes: &[u8] = bytes.get(..512).unwrap_or_else(|| &bytes);
-                        let msg_start = std::str::from_utf8(bytes).unwrap_or_else(|_| "INVALID UTF8");
-                        log::warn!("Failed to parse node message ({msg_start}): {e}");
+                    Err(_) => {
+                        // let bytes: &[u8] = bytes.get(..512).unwrap_or_else(|| &bytes);
+                        // let msg_start = std::str::from_utf8(bytes).unwrap_or_else(|_| "INVALID UTF8");
+                        // log::warn!("Failed to parse node message ({msg_start}): {e}");
                         continue;
                     },
-                    #[cfg(not(debug_assertions))]
-                    Err(_) => {
-                        continue;
-                    }
                 };
+
 
                 // Pull relevant details from the message:
                 let node_message: node_message::NodeMessage = node_message.into();

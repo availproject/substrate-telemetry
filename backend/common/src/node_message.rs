@@ -19,6 +19,8 @@
 //! able to serialize these messages to bincode, and various serde attributes aren't compatible
 //! with this, hence this separate internal representation.
 
+use std::collections::HashMap;
+
 use crate::node_types::{Block, BlockHash, BlockNumber, NodeDetails};
 use serde::{Deserialize, Serialize};
 
@@ -67,20 +69,21 @@ pub enum Payload {
     BlobPolyGrid(BlobPolyGrid),
     BlobCommitment(BlobCommitment),
     BlobRequest(BlobRequest),
+    BlobDropped(BlobDropped),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlobReceived {
     pub hash: BlockHash,
     pub size: usize,
-    pub timestamp: String,
+    pub timestamp: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlobAddedToPool {
     pub hash: BlockHash,
     pub size: usize,
-    pub timestamp: String,
+    pub timestamp: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -88,28 +91,30 @@ pub struct BlobCompression {
     pub org_size: usize,
     pub new_size: usize,
     pub hash: BlockHash,
-    pub duration: u128,
+    pub duration: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlobPolyGrid {
-    pub size: usize,
     pub hash: BlockHash,
-    pub duration: u128,
+    pub start: u64,
+    pub end: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlobCommitment {
-    pub size: usize,
     pub hash: BlockHash,
-    pub duration: u128,
+    pub start: u64,
+    pub end: u64,
+    pub queue_size: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlobRequest {
     pub size: usize,
     pub hash: BlockHash,
-    pub duration: u128,
+    pub start: u64,
+    pub end: u64,
     pub from: Box<str>,
     pub to: Box<str>,
     pub success: bool,
@@ -117,184 +122,147 @@ pub struct BlobRequest {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlobRequestData {
-    pub duration: u128,
+    pub start: u64,
+    pub end: u64,
+    pub duration: u64,
     pub from: Box<str>,
     pub to: Box<str>,
     pub success: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Blob {
-    pub hash: BlockHash,
-    pub size: usize,
+pub struct BlobDropped {
+    pub hash: Option<BlockHash>,
+    pub queue_full: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DropReason {
+    pub queue_full: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct NodeBlobView {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rpc_timestamp: Option<u128>,
+    pub size: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub added_to_pool_timestamp: Option<u128>,
+    pub rpc_timestamp: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub added_to_pool_duration: Option<u128>,
+    pub added_to_pool_timestamp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_duration: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compression_rate: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub compression_duration: Option<u128>,
+    pub compression_duration: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub poly_grid_duration: Option<u128>,
+    pub poly_grid_start: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub commitment_duration: Option<u128>,
-    pub requests_durations: Vec<BlobRequestData>,
+    pub poly_grid_end: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub poly_grid_duration: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment_start: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment_end: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment_duration: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment_queue_size: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<BlobRequestData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dropped: Option<DropReason>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network_id: Option<String>,
 }
 
-impl From<&BlobAddedToPool> for Blob {
-    fn from(value: &BlobAddedToPool) -> Self {
-        let ts = value.timestamp.parse::<u128>().unwrap_or(0u128);
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Blob {
+    pub hash: BlockHash,
+    // usize is ChainNodeId
+    pub map: HashMap<usize, NodeBlobView>,
+}
 
+impl Blob {
+    pub fn new(hash: BlockHash) -> Self {
         Self {
-            hash: value.hash,
-            size: value.size,
-            rpc_timestamp: None,
-            added_to_pool_timestamp: Some(ts),
-            added_to_pool_duration: None,
-            compression_rate: None,
-            compression_duration: None,
-            poly_grid_duration: None,
-            commitment_duration: None,
-            requests_durations: Vec::new(),
+            hash: hash,
+            map: HashMap::default(),
         }
     }
-}
-impl From<BlobAddedToPool> for Blob {
-    fn from(value: BlobAddedToPool) -> Self {
-        Self::from(&value)
+
+    pub fn received(&mut self, node_id: usize, value: &BlobReceived) {
+        let view = self.get(node_id);
+        view.size = Some(value.size);
+        view.rpc_timestamp = Some(value.timestamp);
     }
-}
 
-impl From<&BlobReceived> for Blob {
-    fn from(value: &BlobReceived) -> Self {
-        let ts = value.timestamp.parse::<u128>().unwrap_or(0u128);
+    pub fn added_to_pool(&mut self, node_id: usize, value: &BlobAddedToPool) {
+        let view = self.get(node_id);
+        view.size = Some(value.size);
+        view.added_to_pool_timestamp = Some(value.timestamp);
 
-        Self {
-            hash: value.hash,
-            size: value.size,
-            rpc_timestamp: Some(ts),
-            added_to_pool_timestamp: None,
-            added_to_pool_duration: None,
-            compression_rate: None,
-            compression_duration: None,
-            poly_grid_duration: None,
-            commitment_duration: None,
-            requests_durations: Vec::new(),
+        if let Some(rpc_timestamp) = view.rpc_timestamp {
+            view.total_duration = Some(value.timestamp.saturating_sub(rpc_timestamp))
         }
     }
-}
-impl From<BlobReceived> for Blob {
-    fn from(value: BlobReceived) -> Self {
-        Self::from(&value)
-    }
-}
 
-impl From<&BlobCompression> for Blob {
-    fn from(value: &BlobCompression) -> Self {
+    pub fn compression(&mut self, node_id: usize, value: &BlobCompression) {
         let compression_rate = if value.org_size != 0 && value.new_size != 0 {
             Some(value.org_size as f32 / value.new_size as f32)
         } else {
             None
         };
-        let compression_duration = Some(value.duration);
 
-        Self {
-            hash: value.hash,
-            size: value.org_size,
-            rpc_timestamp: None,
-            added_to_pool_timestamp: None,
-            added_to_pool_duration: None,
-            compression_rate: compression_rate,
-            compression_duration: compression_duration,
-            poly_grid_duration: None,
-            commitment_duration: None,
-            requests_durations: Vec::new(),
-        }
+        let view = self.get(node_id);
+        view.compression_rate = compression_rate;
+        view.compression_duration = Some(value.duration);
     }
-}
-impl From<BlobCompression> for Blob {
-    fn from(value: BlobCompression) -> Self {
-        Self::from(&value)
-    }
-}
 
-impl From<&BlobPolyGrid> for Blob {
-    fn from(value: &BlobPolyGrid) -> Self {
-        let duration = Some(value.duration);
-
-        Self {
-            hash: value.hash,
-            size: value.size,
-            rpc_timestamp: None,
-            added_to_pool_timestamp: None,
-            added_to_pool_duration: None,
-            compression_rate: None,
-            compression_duration: None,
-            poly_grid_duration: duration,
-            commitment_duration: None,
-            requests_durations: Vec::new(),
-        }
+    pub fn poly_grid(&mut self, node_id: usize, value: &BlobPolyGrid) {
+        let view = self.get(node_id);
+        view.poly_grid_start = Some(value.start);
+        view.poly_grid_end = Some(value.end);
+        view.poly_grid_duration = Some(value.end.saturating_sub(value.start));
     }
-}
-impl From<BlobPolyGrid> for Blob {
-    fn from(value: BlobPolyGrid) -> Self {
-        Self::from(&value)
-    }
-}
 
-impl From<&BlobCommitment> for Blob {
-    fn from(value: &BlobCommitment) -> Self {
-        let duration = Some(value.duration);
-
-        Self {
-            hash: value.hash,
-            size: value.size,
-            rpc_timestamp: None,
-            added_to_pool_timestamp: None,
-            added_to_pool_duration: None,
-            compression_rate: None,
-            compression_duration: None,
-            poly_grid_duration: None,
-            commitment_duration: duration,
-            requests_durations: Vec::new(),
-        }
+    pub fn commitment(&mut self, node_id: usize, value: &BlobCommitment) {
+        let view = self.get(node_id);
+        view.commitment_start = Some(value.start);
+        view.commitment_end = Some(value.end);
+        view.commitment_queue_size = Some(value.queue_size);
+        view.commitment_duration = Some(value.end.saturating_sub(value.start));
     }
-}
-impl From<BlobCommitment> for Blob {
-    fn from(value: BlobCommitment) -> Self {
-        Self::from(&value)
-    }
-}
 
-impl From<&BlobRequest> for Blob {
-    fn from(value: &BlobRequest) -> Self {
+    pub fn request(&mut self, node_id: usize, value: &BlobRequest) {
         let rq_data = BlobRequestData {
-            duration: value.duration,
+            duration: value.end.saturating_sub(value.start),
+            end: value.end,
+            start: value.start,
             from: value.from.clone(),
             to: value.to.clone(),
             success: value.success,
         };
 
-        Self {
-            hash: value.hash,
-            size: value.size,
-            rpc_timestamp: None,
-            added_to_pool_timestamp: None,
-            added_to_pool_duration: None,
-            compression_rate: None,
-            compression_duration: None,
-            poly_grid_duration: None,
-            commitment_duration: None,
-            requests_durations: vec![rq_data],
-        }
+        let view = self.get(node_id);
+        view.request = Some(rq_data);
     }
-}
-impl From<BlobRequest> for Blob {
-    fn from(value: BlobRequest) -> Self {
-        Self::from(&value)
+
+    pub fn dropped(&mut self, node_id: usize, value: &BlobDropped) {
+        let view = self.get(node_id);
+        view.dropped = Some(DropReason {
+            queue_full: value.queue_full,
+        });
+    }
+
+    // Get or create
+    fn get(&mut self, node_id: usize) -> &mut NodeBlobView {
+        if !self.map.contains_key(&node_id) {
+            self.map.insert(node_id, NodeBlobView::default());
+        }
+
+        self.map.get_mut(&node_id).expect("Just inserted. qed")
     }
 }
 
