@@ -84,6 +84,12 @@ pub enum Payload {
     BlobAddedToPool(BlobAddedToPool),
     #[serde(rename = "blob.compression")]
     BlobCompression(BlobCompression),
+    #[serde(rename = "blob.polygrid")]
+    BlobPolyGrid(BlobPolyGrid),
+    #[serde(rename = "blob.commitment")]
+    BlobCommitment(BlobCommitment),
+    #[serde(rename = "blob.request")]
+    BlobRequest(BlobRequest),
 }
 
 impl From<Payload> for internal::Payload {
@@ -98,23 +104,9 @@ impl From<Payload> for internal::Payload {
             Payload::BlobReceived(m) => internal::Payload::BlobReceived(m.into()),
             Payload::BlobAddedToPool(m) => internal::Payload::BlobAddedToPool(m.into()),
             Payload::BlobCompression(m) => internal::Payload::BlobCompression(m.into()),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct BlobCompression {
-    pub org_size: usize,
-    pub new_size: usize,
-    pub hash: Hash,
-}
-
-impl From<BlobCompression> for internal::BlobCompression {
-    fn from(msg: BlobCompression) -> Self {
-        internal::BlobCompression {
-            org_size: msg.org_size.into(),
-            new_size: msg.new_size.into(),
-            hash: msg.hash.into(),
+            Payload::BlobPolyGrid(m) => internal::Payload::BlobPolyGrid(m.into()),
+            Payload::BlobCommitment(m) => internal::Payload::BlobCommitment(m.into()),
+            Payload::BlobRequest(m) => internal::Payload::BlobRequest(m.into()),
         }
     }
 }
@@ -149,6 +141,82 @@ impl From<BlobAddedToPool> for internal::BlobAddedToPool {
             hash: msg.hash.into(),
             timestamp: msg.timestamp.into(),
             size: msg.size.into(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BlobCompression {
+    pub org_size: usize,
+    pub new_size: usize,
+    pub hash: Hash,
+    pub duration: u128,
+}
+
+impl From<BlobCompression> for internal::BlobCompression {
+    fn from(msg: BlobCompression) -> Self {
+        internal::BlobCompression {
+            org_size: msg.org_size.into(),
+            new_size: msg.new_size.into(),
+            hash: msg.hash.into(),
+            duration: msg.duration.into(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BlobPolyGrid {
+    pub size: usize,
+    pub hash: Hash,
+    pub duration: u128,
+}
+
+impl From<BlobPolyGrid> for internal::BlobPolyGrid {
+    fn from(msg: BlobPolyGrid) -> Self {
+        internal::BlobPolyGrid {
+            size: msg.size.into(),
+            hash: msg.hash.into(),
+            duration: msg.duration.into(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BlobCommitment {
+    pub size: usize,
+    pub hash: Hash,
+    pub duration: u128,
+}
+
+impl From<BlobCommitment> for internal::BlobCommitment {
+    fn from(msg: BlobCommitment) -> Self {
+        internal::BlobCommitment {
+            size: msg.size.into(),
+            hash: msg.hash.into(),
+            duration: msg.duration.into(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BlobRequest {
+    pub size: usize,
+    pub hash: Hash,
+    pub duration: u128,
+    pub from: Box<str>,
+    pub to: Box<str>,
+    pub success: bool,
+}
+
+impl From<BlobRequest> for internal::BlobRequest {
+    fn from(msg: BlobRequest) -> Self {
+        internal::BlobRequest {
+            size: msg.size.into(),
+            hash: msg.hash.into(),
+            duration: msg.duration.into(),
+            from: msg.from,
+            to: msg.to,
+            success: msg.success,
         }
     }
 }

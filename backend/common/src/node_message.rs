@@ -64,13 +64,9 @@ pub enum Payload {
     BlobReceived(BlobReceived),
     BlobAddedToPool(BlobAddedToPool),
     BlobCompression(BlobCompression),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BlobCompression {
-    pub org_size: usize,
-    pub new_size: usize,
-    pub hash: BlockHash,
+    BlobPolyGrid(BlobPolyGrid),
+    BlobCommitment(BlobCommitment),
+    BlobRequest(BlobRequest),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -88,6 +84,46 @@ pub struct BlobAddedToPool {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlobCompression {
+    pub org_size: usize,
+    pub new_size: usize,
+    pub hash: BlockHash,
+    pub duration: u128,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlobPolyGrid {
+    pub size: usize,
+    pub hash: BlockHash,
+    pub duration: u128,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlobCommitment {
+    pub size: usize,
+    pub hash: BlockHash,
+    pub duration: u128,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlobRequest {
+    pub size: usize,
+    pub hash: BlockHash,
+    pub duration: u128,
+    pub from: Box<str>,
+    pub to: Box<str>,
+    pub success: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlobRequestData {
+    pub duration: u128,
+    pub from: Box<str>,
+    pub to: Box<str>,
+    pub success: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Blob {
     pub hash: BlockHash,
     pub size: usize,
@@ -95,9 +131,17 @@ pub struct Blob {
     pub rpc_timestamp: Option<u128>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub added_to_pool_timestamp: Option<u128>,
-    pub duration: Option<u128>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub added_to_pool_duration: Option<u128>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compression_rate: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compression_duration: Option<u128>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub poly_grid_duration: Option<u128>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment_duration: Option<u128>,
+    pub requests_durations: Vec<BlobRequestData>,
 }
 
 impl From<&BlobAddedToPool> for Blob {
@@ -109,12 +153,15 @@ impl From<&BlobAddedToPool> for Blob {
             size: value.size,
             rpc_timestamp: None,
             added_to_pool_timestamp: Some(ts),
-            duration: None,
+            added_to_pool_duration: None,
             compression_rate: None,
+            compression_duration: None,
+            poly_grid_duration: None,
+            commitment_duration: None,
+            requests_durations: Vec::new(),
         }
     }
 }
-
 impl From<BlobAddedToPool> for Blob {
     fn from(value: BlobAddedToPool) -> Self {
         Self::from(&value)
@@ -130,14 +177,123 @@ impl From<&BlobReceived> for Blob {
             size: value.size,
             rpc_timestamp: Some(ts),
             added_to_pool_timestamp: None,
-            duration: None,
+            added_to_pool_duration: None,
             compression_rate: None,
+            compression_duration: None,
+            poly_grid_duration: None,
+            commitment_duration: None,
+            requests_durations: Vec::new(),
         }
     }
 }
-
 impl From<BlobReceived> for Blob {
     fn from(value: BlobReceived) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&BlobCompression> for Blob {
+    fn from(value: &BlobCompression) -> Self {
+        let compression_rate = if value.org_size != 0 && value.new_size != 0 {
+            Some(value.org_size as f32 / value.new_size as f32)
+        } else {
+            None
+        };
+        let compression_duration = Some(value.duration);
+
+        Self {
+            hash: value.hash,
+            size: value.org_size,
+            rpc_timestamp: None,
+            added_to_pool_timestamp: None,
+            added_to_pool_duration: None,
+            compression_rate: compression_rate,
+            compression_duration: compression_duration,
+            poly_grid_duration: None,
+            commitment_duration: None,
+            requests_durations: Vec::new(),
+        }
+    }
+}
+impl From<BlobCompression> for Blob {
+    fn from(value: BlobCompression) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&BlobPolyGrid> for Blob {
+    fn from(value: &BlobPolyGrid) -> Self {
+        let duration = Some(value.duration);
+
+        Self {
+            hash: value.hash,
+            size: value.size,
+            rpc_timestamp: None,
+            added_to_pool_timestamp: None,
+            added_to_pool_duration: None,
+            compression_rate: None,
+            compression_duration: None,
+            poly_grid_duration: duration,
+            commitment_duration: None,
+            requests_durations: Vec::new(),
+        }
+    }
+}
+impl From<BlobPolyGrid> for Blob {
+    fn from(value: BlobPolyGrid) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&BlobCommitment> for Blob {
+    fn from(value: &BlobCommitment) -> Self {
+        let duration = Some(value.duration);
+
+        Self {
+            hash: value.hash,
+            size: value.size,
+            rpc_timestamp: None,
+            added_to_pool_timestamp: None,
+            added_to_pool_duration: None,
+            compression_rate: None,
+            compression_duration: None,
+            poly_grid_duration: None,
+            commitment_duration: duration,
+            requests_durations: Vec::new(),
+        }
+    }
+}
+impl From<BlobCommitment> for Blob {
+    fn from(value: BlobCommitment) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&BlobRequest> for Blob {
+    fn from(value: &BlobRequest) -> Self {
+        let rq_data = BlobRequestData {
+            duration: value.duration,
+            from: value.from.clone(),
+            to: value.to.clone(),
+            success: value.success,
+        };
+
+        Self {
+            hash: value.hash,
+            size: value.size,
+            rpc_timestamp: None,
+            added_to_pool_timestamp: None,
+            added_to_pool_duration: None,
+            compression_rate: None,
+            compression_duration: None,
+            poly_grid_duration: None,
+            commitment_duration: None,
+            requests_durations: vec![rq_data],
+        }
+    }
+}
+impl From<BlobRequest> for Blob {
+    fn from(value: BlobRequest) -> Self {
         Self::from(&value)
     }
 }
