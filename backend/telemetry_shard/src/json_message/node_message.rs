@@ -21,8 +21,8 @@
 //! structures (for example, to support bincode better).
 use super::hash::Hash;
 use common::node_message as internal;
+use common::node_message::BlobSubmission;
 use common::node_types;
-use primitive_types::H256;
 use serde::Deserialize;
 
 /// This struct represents a telemetry message sent from a node as
@@ -79,20 +79,10 @@ pub enum Payload {
     AfgAuthoritySet(AfgAuthoritySet),
     #[serde(rename = "sysinfo.hwbench")]
     HwBench(NodeHwBench),
-    #[serde(rename = "blob.received")]
-    BlobReceived(BlobReceived),
-    #[serde(rename = "blob.addedToPool")]
-    BlobAddedToPool(BlobAddedToPool),
-    #[serde(rename = "blob.compression")]
-    BlobCompression(BlobCompression),
-    #[serde(rename = "blob.polygrid")]
-    BlobPolyGrid(BlobPolyGrid),
-    #[serde(rename = "blob.commitment")]
-    BlobCommitment(BlobCommitment),
+    #[serde(rename = "blob.submission")]
+    BlobSubmission(BlobSubmission),
     #[serde(rename = "blob.request")]
     BlobRequest(BlobRequest),
-    #[serde(rename = "blob.dropped")]
-    BlobDropped(BlobDropped),
 }
 
 impl From<Payload> for internal::Payload {
@@ -104,102 +94,8 @@ impl From<Payload> for internal::Payload {
             Payload::NotifyFinalized(m) => internal::Payload::NotifyFinalized(m.into()),
             Payload::AfgAuthoritySet(m) => internal::Payload::AfgAuthoritySet(m.into()),
             Payload::HwBench(m) => internal::Payload::HwBench(m.into()),
-            Payload::BlobReceived(m) => internal::Payload::BlobReceived(m.into()),
-            Payload::BlobAddedToPool(m) => internal::Payload::BlobAddedToPool(m.into()),
-            Payload::BlobCompression(m) => internal::Payload::BlobCompression(m.into()),
-            Payload::BlobPolyGrid(m) => internal::Payload::BlobPolyGrid(m.into()),
-            Payload::BlobCommitment(m) => internal::Payload::BlobCommitment(m.into()),
+            Payload::BlobSubmission(m) => internal::Payload::BlobSubmission(m),
             Payload::BlobRequest(m) => internal::Payload::BlobRequest(m.into()),
-            Payload::BlobDropped(m) => internal::Payload::BlobDropped(m.into()),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct BlobReceived {
-    pub hash: Hash,
-    pub size: usize,
-    pub timestamp: u64,
-}
-
-impl From<BlobReceived> for internal::BlobReceived {
-    fn from(msg: BlobReceived) -> Self {
-        internal::BlobReceived {
-            hash: msg.hash.into(),
-            timestamp: msg.timestamp.into(),
-            size: msg.size.into(),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct BlobAddedToPool {
-    pub hash: Hash,
-    pub size: usize,
-    pub timestamp: u64,
-}
-
-impl From<BlobAddedToPool> for internal::BlobAddedToPool {
-    fn from(msg: BlobAddedToPool) -> Self {
-        internal::BlobAddedToPool {
-            hash: msg.hash.into(),
-            timestamp: msg.timestamp.into(),
-            size: msg.size.into(),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct BlobCompression {
-    pub org_size: usize,
-    pub new_size: usize,
-    pub hash: Hash,
-    pub duration: u64,
-}
-
-impl From<BlobCompression> for internal::BlobCompression {
-    fn from(msg: BlobCompression) -> Self {
-        internal::BlobCompression {
-            org_size: msg.org_size.into(),
-            new_size: msg.new_size.into(),
-            hash: msg.hash.into(),
-            duration: msg.duration.into(),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct BlobPolyGrid {
-    pub hash: Hash,
-    pub start: u64,
-    pub end: u64,
-}
-
-impl From<BlobPolyGrid> for internal::BlobPolyGrid {
-    fn from(msg: BlobPolyGrid) -> Self {
-        internal::BlobPolyGrid {
-            hash: msg.hash.into(),
-            start: msg.start.into(),
-            end: msg.end.into(),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct BlobCommitment {
-    pub hash: Hash,
-    pub start: u64,
-    pub end: u64,
-    pub queue_size: usize,
-}
-
-impl From<BlobCommitment> for internal::BlobCommitment {
-    fn from(msg: BlobCommitment) -> Self {
-        internal::BlobCommitment {
-            hash: msg.hash.into(),
-            start: msg.start.into(),
-            end: msg.end.into(),
-            queue_size: msg.queue_size.into(),
         }
     }
 }
@@ -225,21 +121,6 @@ impl From<BlobRequest> for internal::BlobRequest {
             from: msg.from,
             to: msg.to,
             success: msg.success,
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct BlobDropped {
-    pub hash: Option<H256>,
-    pub queue_full: bool,
-}
-
-impl From<BlobDropped> for internal::BlobDropped {
-    fn from(msg: BlobDropped) -> Self {
-        internal::BlobDropped {
-            hash: msg.hash.into(),
-            queue_full: msg.queue_full.into(),
         }
     }
 }

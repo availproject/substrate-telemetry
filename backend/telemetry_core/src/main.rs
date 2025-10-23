@@ -20,6 +20,7 @@ mod find_location;
 mod state;
 use hyper::Body;
 use primitive_types::H256;
+use std::fmt::Write;
 use std::str::FromStr;
 use tokio::time::{Duration, Instant};
 
@@ -218,16 +219,22 @@ async fn start_server(num_aggregators: usize, opts: Opts) -> anyhow::Result<()> 
                         let Ok(genesis_hash) = genesis_hash.parse::<H256>() else {
                             return error_response("Cannot convert given block hash to H256");
                         };
-                        let overview = match aggregator.blob_endpoint(genesis_hash) {
+
+                        let blobs = match aggregator.blob_endpoint(genesis_hash) {
                             Ok(o) => o,
                             Err(err) => return error_response(err),
                         };
 
-                        let Ok(overview) = serde_json::to_string_pretty(&overview) else {
-                            return error_response("Failed to do json");
-                        };
+                        let mut result = String::new();
+                        for blob in blobs {
+                            _ = std::writeln!(&mut result, "{}", blob.serialize());
+                        }
 
-                        Ok(Response::builder().body(overview.into()).unwrap())
+                        // let Ok(overview) = serde_json::to_string_pretty(&overview) else {
+                        //     return error_response("Failed to do json");
+                        // };
+
+                        Ok(Response::builder().body(result.into()).unwrap())
                     } else {
                         Ok(Response::builder()
                             .status(404)

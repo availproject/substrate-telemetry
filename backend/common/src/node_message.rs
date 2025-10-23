@@ -19,7 +19,7 @@
 //! able to serialize these messages to bincode, and various serde attributes aren't compatible
 //! with this, hence this separate internal representation.
 
-use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashMap, fmt::Write};
 
 use crate::node_types::{Block, BlockHash, BlockNumber, NodeDetails};
 use serde::{Deserialize, Serialize};
@@ -63,50 +63,34 @@ pub enum Payload {
     NotifyFinalized(Finalized),
     AfgAuthoritySet(AfgAuthoritySet),
     HwBench(NodeHwBench),
-    BlobReceived(BlobReceived),
-    BlobAddedToPool(BlobAddedToPool),
-    BlobCompression(BlobCompression),
-    BlobPolyGrid(BlobPolyGrid),
-    BlobCommitment(BlobCommitment),
+    BlobSubmission(BlobSubmission),
     BlobRequest(BlobRequest),
-    BlobDropped(BlobDropped),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BlobReceived {
+pub struct BlobSubmission {
     pub hash: BlockHash,
-    pub size: usize,
-    pub timestamp: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BlobAddedToPool {
-    pub hash: BlockHash,
-    pub size: usize,
-    pub timestamp: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BlobCompression {
-    pub org_size: usize,
-    pub new_size: usize,
-    pub hash: BlockHash,
-    pub duration: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BlobPolyGrid {
-    pub hash: BlockHash,
-    pub start: u64,
-    pub end: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BlobCommitment {
-    pub hash: BlockHash,
-    pub start: u64,
-    pub end: u64,
-    pub queue_size: usize,
+    pub size: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub submission_tracked: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub added_to_pool_timestamp: Option<u64>,
+    // In bytes
+    pub compression_size: Option<u64>,
+    // In ms
+    pub compression_duration: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub poly_grid_build_start_timestamp: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub poly_grid_build_end_timestamp: Option<u64>,
+    // 0 means it was full
+    pub queue_capacity: Option<u32>,
+    // At what point in time did we measure the queue capacity
+    pub queue_capacity_timestamp: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub commitment_grid_build_start_timestamp: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub commitment_grid_build_end_timestamp: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -130,54 +114,35 @@ pub struct BlobRequestData {
     pub success: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BlobDropped {
-    pub hash: Option<BlockHash>,
-    pub queue_full: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct DropReason {
-    pub queue_full: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct NodeBlobView {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub size: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rpc_timestamp: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub submission_tracked: Option<u64>,
+    // Milliseconds past UNIX EPOCH
     pub added_to_pool_timestamp: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub total_duration: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub compression_rate: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // In bytes
+    pub compression_size: Option<u64>,
+    // In ms
     pub compression_duration: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub poly_grid_start: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub poly_grid_end: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub poly_grid_duration: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub commitment_start: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub commitment_end: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub commitment_duration: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub commitment_queue_size: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // Milliseconds past UNIX EPOCH
+    pub poly_grid_build_start_timestamp: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub poly_grid_build_end_timestamp: Option<u64>,
+    // 0 means it was full
+    pub queue_capacity: Option<u32>,
+    // At what point in time did we measure the queue capacity
+    pub queue_capacity_timestamp: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub commitment_grid_build_start_timestamp: Option<u64>,
+    // Milliseconds past UNIX EPOCH
+    pub commitment_grid_build_end_timestamp: Option<u64>,
     pub request: Option<BlobRequestData>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dropped: Option<DropReason>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // Peer Address
     pub network_id: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Blob {
     pub hash: BlockHash,
     // usize is ChainNodeId
@@ -192,47 +157,140 @@ impl Blob {
         }
     }
 
-    pub fn received(&mut self, node_id: usize, value: &BlobReceived) {
-        let view = self.get(node_id);
-        view.size = Some(value.size);
-        view.rpc_timestamp = Some(value.timestamp);
-    }
+    pub fn serialize(&self) -> String {
+        let mut main_text = std::format!("BLOB_HASH: {:?}", self.hash);
+        _ = std::writeln!(&mut main_text, "");
 
-    pub fn added_to_pool(&mut self, node_id: usize, value: &BlobAddedToPool) {
-        let view = self.get(node_id);
-        view.size = Some(value.size);
-        view.added_to_pool_timestamp = Some(value.timestamp);
+        let mut list: Vec<(usize, NodeBlobView)> = self.map.clone().into_iter().collect();
+        list.sort_by(|x, y| {
+            if x.1.submission_tracked.is_some() {
+                return Ordering::Less;
+            }
 
-        if let Some(rpc_timestamp) = view.rpc_timestamp {
-            view.total_duration = Some(value.timestamp.saturating_sub(rpc_timestamp))
+            if y.1.submission_tracked.is_some() {
+                return Ordering::Greater;
+            }
+
+            x.1.request
+                .as_ref()
+                .map(|x| x.start)
+                .cmp(&y.1.request.as_ref().map(|x| x.start))
+        });
+
+        for (key, view) in list {
+            let mut sub_text = std::format!("NODE_ID: {}", key);
+
+            if let Some(value) = &view.network_id {
+                _ = std::write!(&mut sub_text, " PEER_ID: {}", value);
+            }
+
+            if let Some(start) = &view.submission_tracked
+                && let Some(end) = &view.added_to_pool_timestamp
+            {
+                if let Some(value) = chrono::DateTime::from_timestamp_millis(*start as i64) {
+                    _ = std::write!(&mut sub_text, " START: {}", value);
+                }
+                if let Some(value) = chrono::DateTime::from_timestamp_millis(*end as i64) {
+                    _ = std::write!(&mut sub_text, " END: {}", value);
+                }
+
+                _ = std::write!(
+                    &mut sub_text,
+                    " SUBMISSION_DURATION: {} ms",
+                    end.saturating_sub(*start)
+                );
+            }
+
+            if let Some(value) = &view.size {
+                _ = std::write!(&mut sub_text, " SIZE: {} bytes", value);
+            }
+
+            if let Some(start) = &view.poly_grid_build_start_timestamp
+                && let Some(end) = &view.poly_grid_build_end_timestamp
+            {
+                _ = std::write!(
+                    &mut sub_text,
+                    " POLY_GRID_BUILD_DURATION: {} ms",
+                    end.saturating_sub(*start)
+                );
+            }
+
+            if let Some(start) = &view.commitment_grid_build_start_timestamp
+                && let Some(end) = &view.commitment_grid_build_end_timestamp
+            {
+                _ = std::write!(
+                    &mut sub_text,
+                    " COMMITMENT_BUILD_DURATION: {} ms",
+                    end.saturating_sub(*start)
+                );
+            }
+
+            if let Some(value) = &view.compression_size {
+                _ = std::write!(&mut sub_text, " COMPRESSED_SIZE: {} bytes", value);
+            }
+            if let Some(value) = &view.compression_duration {
+                _ = std::write!(&mut sub_text, " COMPRESSION_DURATION: {} ms", value);
+            }
+            if let Some(value) = &view.queue_capacity {
+                _ = std::write!(&mut sub_text, " QUEUE_CAPACITY: {}", value);
+            }
+
+            if let Some(request) = &view.request {
+                if let Some(value) = chrono::DateTime::from_timestamp_millis(request.start as i64) {
+                    _ = std::write!(&mut sub_text, " START: {}", value);
+                }
+                if let Some(value) = chrono::DateTime::from_timestamp_millis(request.end as i64) {
+                    _ = std::write!(&mut sub_text, " END: {}", value);
+                }
+
+                _ = std::write!(&mut sub_text, " REQUEST FROM: {}", request.from);
+                _ = std::write!(&mut sub_text, " REQUEST TO: {}", request.to);
+                _ = std::write!(&mut sub_text, " DURATION: {} ms", request.duration);
+
+                _ = std::write!(&mut sub_text, " SUCCESS: {}", request.success);
+            }
+
+            _ = std::writeln!(&mut main_text, "\t{}", sub_text);
         }
+
+        main_text
     }
 
-    pub fn compression(&mut self, node_id: usize, value: &BlobCompression) {
-        let compression_rate = if value.org_size != 0 && value.new_size != 0 {
-            Some(value.org_size as f32 / value.new_size as f32)
-        } else {
-            None
-        };
-
+    pub fn submission(&mut self, node_id: usize, submission: &BlobSubmission) {
         let view = self.get(node_id);
-        view.compression_rate = compression_rate;
-        view.compression_duration = Some(value.duration);
-    }
-
-    pub fn poly_grid(&mut self, node_id: usize, value: &BlobPolyGrid) {
-        let view = self.get(node_id);
-        view.poly_grid_start = Some(value.start);
-        view.poly_grid_end = Some(value.end);
-        view.poly_grid_duration = Some(value.end.saturating_sub(value.start));
-    }
-
-    pub fn commitment(&mut self, node_id: usize, value: &BlobCommitment) {
-        let view = self.get(node_id);
-        view.commitment_start = Some(value.start);
-        view.commitment_end = Some(value.end);
-        view.commitment_queue_size = Some(value.queue_size);
-        view.commitment_duration = Some(value.end.saturating_sub(value.start));
+        if let Some(value) = submission.size {
+            view.size = Some(value);
+        }
+        if let Some(value) = submission.submission_tracked {
+            view.submission_tracked = Some(value);
+        }
+        if let Some(value) = submission.added_to_pool_timestamp {
+            view.added_to_pool_timestamp = Some(value);
+        }
+        if let Some(value) = submission.compression_size {
+            view.compression_size = Some(value);
+        }
+        if let Some(value) = submission.compression_duration {
+            view.compression_duration = Some(value);
+        }
+        if let Some(value) = submission.poly_grid_build_start_timestamp {
+            view.poly_grid_build_start_timestamp = Some(value);
+        }
+        if let Some(value) = submission.poly_grid_build_end_timestamp {
+            view.poly_grid_build_end_timestamp = Some(value);
+        }
+        if let Some(value) = submission.queue_capacity {
+            view.queue_capacity = Some(value);
+        }
+        if let Some(value) = submission.queue_capacity_timestamp {
+            view.queue_capacity_timestamp = Some(value);
+        }
+        if let Some(value) = submission.commitment_grid_build_start_timestamp {
+            view.commitment_grid_build_start_timestamp = Some(value);
+        }
+        if let Some(value) = submission.commitment_grid_build_end_timestamp {
+            view.commitment_grid_build_end_timestamp = Some(value);
+        }
     }
 
     pub fn request(&mut self, node_id: usize, value: &BlobRequest) {
@@ -247,13 +305,6 @@ impl Blob {
 
         let view = self.get(node_id);
         view.request = Some(rq_data);
-    }
-
-    pub fn dropped(&mut self, node_id: usize, value: &BlobDropped) {
-        let view = self.get(node_id);
-        view.dropped = Some(DropReason {
-            queue_full: value.queue_full,
-        });
     }
 
     // Get or create
@@ -317,11 +368,11 @@ impl Payload {
 
     pub fn finalized_block(&self) -> Option<Block> {
         match self {
-            Payload::SystemInterval(ref interval) => Some(Block {
+            Payload::SystemInterval(interval) => Some(Block {
                 hash: interval.finalized_hash?,
                 height: interval.finalized_height?,
             }),
-            Payload::NotifyFinalized(ref finalized) => Some(Block {
+            Payload::NotifyFinalized(finalized) => Some(Block {
                 hash: finalized.hash,
                 height: finalized.height.parse().ok()?,
             }),

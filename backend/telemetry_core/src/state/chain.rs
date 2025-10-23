@@ -257,35 +257,13 @@ impl Chain {
                     self.stats_collator
                         .update_hwbench(node.hwbench(), CounterValue::Increment);
                 }
-                Payload::BlobReceived(ref prop) => {
+                Payload::BlobSubmission(ref prop) => {
                     let blob = self.blobs.get(prop.hash);
-                    blob.received(nid.0, prop);
-                }
-                Payload::BlobAddedToPool(ref prop) => {
-                    let blob = self.blobs.get(prop.hash);
-                    blob.added_to_pool(nid.0, prop);
-                }
-                Payload::BlobCompression(ref prop) => {
-                    let blob = self.blobs.get(prop.hash);
-                    blob.compression(nid.0, prop);
-                }
-                Payload::BlobPolyGrid(ref prop) => {
-                    let blob = self.blobs.get(prop.hash);
-                    blob.poly_grid(nid.0, prop);
-                }
-                Payload::BlobCommitment(ref prop) => {
-                    let blob = self.blobs.get(prop.hash);
-                    blob.commitment(nid.0, prop);
+                    blob.submission(nid.0, prop);
                 }
                 Payload::BlobRequest(ref prop) => {
                     let blob = self.blobs.get(prop.hash);
                     blob.request(nid.0, prop);
-                }
-                Payload::BlobDropped(ref prop) => {
-                    if let Some(hash) = &prop.hash {
-                        let blob = self.blobs.get(*hash);
-                        blob.dropped(nid.0, prop);
-                    }
                 }
                 _ => {}
             }
@@ -470,18 +448,17 @@ impl Chain {
         // Make contiguous
         let mut blobs = self.blobs.blobs.clone().make_contiguous().to_vec();
 
-        // TODO do some sort
         blobs.sort_by(|x, y| {
             let mut x_rpc: Option<u64> = None;
             let mut y_rpc: Option<u64> = None;
             for view in x.map.values() {
-                if let Some(timestamp) = view.rpc_timestamp {
+                if let Some(timestamp) = view.submission_tracked {
                     x_rpc = Some(timestamp);
                     break;
                 }
             }
             for view in y.map.values() {
-                if let Some(timestamp) = view.rpc_timestamp {
+                if let Some(timestamp) = view.submission_tracked {
                     y_rpc = Some(timestamp);
                     break;
                 }
